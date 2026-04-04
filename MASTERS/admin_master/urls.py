@@ -1,0 +1,56 @@
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from . import views
+
+# Initialize router for ViewSets
+router = DefaultRouter()
+router.register(r'user-types', views.UserTypeViewSet)
+router.register(r'main-screens', views.MainScreenViewSet)
+
+# User endpoints
+user_patterns = [
+    path('users/', views.user_list, name='user-list'),
+    path('users/create/', views.create_user, name='user-create'),
+    path('users/<int:pk>/', views.update_user, name='user-update'),
+    path('users/<int:pk>/toggle/', views.toggle_user_status, name='user-toggle'),
+]
+
+# User Screen endpoints
+user_screen_patterns = [
+    path('user-screens/', views.user_screen_list, name='user-screen-list'),
+    path('user-screens/create/', views.create_user_screen, name='user-screen-create'),
+    path('user-screens/<int:pk>/', views.update_user_screen, name='user-screen-update'),
+    path('user-screens/<int:pk>/toggle/', views.toggle_status, name='user-screen-toggle'),
+]
+
+# User Type endpoints
+user_type_patterns = [
+    path('user-types/', views.user_type_list, name='user-type-list'),
+    path('user-types/create/', views.create_user_type, name='user-type-create'),
+    path('user-types/<int:pk>/', views.update_user_type, name='user-type-update'),
+    path('user-types/<int:pk>/toggle/', views.toggle_user_type, name='user-type-toggle'),
+]
+
+# Main Screen & Screen Section endpoints
+screen_patterns = [
+    path('main-screens/list/', views.main_screen_list, name='main-screen-list'),
+    path('screen-sections/', views.screen_section_list, name='screen-section-list'),
+]
+
+# User Type Permission endpoints
+permission_patterns = [
+    path('user-permissions/', views.user_type_permission_list, name='user-permission-list'),
+    path('user-permissions/create/', views.create_user_type_permission, name='user-permission-create'),
+    path('user-permissions/<int:pk>/', views.update_user_type_permission, name='user-permission-update'),
+    path('user-permissions/<int:pk>/toggle/', views.toggle_user_type_permission, name='user-permission-toggle'),
+]
+
+# Combine all patterns
+urlpatterns = (
+    [path('', include(router.urls))] +
+    user_patterns +
+    user_screen_patterns +
+    user_type_patterns +
+    screen_patterns +
+    permission_patterns
+)
