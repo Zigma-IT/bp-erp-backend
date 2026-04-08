@@ -4,3 +4,8 @@ from django.apps import AppConfig
 class LoginConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'login_home'
+
+    def ready(self):
+        from .bootstrap import ensure_dev_admin_user
+
+        ensure_dev_admin_user()
