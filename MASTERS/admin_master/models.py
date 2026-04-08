@@ -33,20 +33,6 @@ class TicketUserType(models.Model):
         return self.name
 
 
-class Company(models.Model):
-    name = models.CharField(max_length=150)
-
-    def __str__(self):
-        return self.name
-
-
-class Department(models.Model):
-    name = models.CharField(max_length=150)
-
-    def __str__(self):
-        return self.name
-
-
 class Staff(models.Model):
     name = models.CharField(max_length=150)
     mobile = models.CharField(max_length=15)
@@ -55,7 +41,7 @@ class Staff(models.Model):
         return self.name
 
 
-class User(models.Model):
+class UserCreation(models.Model):
     role = models.ForeignKey(Role, on_delete=models.CASCADE)
     staff = models.ForeignKey(Staff, on_delete=models.CASCADE)
     username = models.CharField(max_length=150, unique=True)
@@ -64,8 +50,8 @@ class User(models.Model):
     mobile = models.CharField(max_length=15, null=True, blank=True)
     project = models.CharField(max_length=150, null=True, blank=True)
     under_users = models.CharField(max_length=150, null=True, blank=True)
-    company = models.ForeignKey(Company, on_delete=models.SET_NULL, null=True, blank=True)
-    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
+    company = models.ForeignKey("common_master.Company", on_delete=models.SET_NULL, null=True, blank=True)
+    department = models.ForeignKey("login_home.Department", on_delete=models.SET_NULL, null=True, blank=True)
     ticket_user_type = models.ForeignKey(TicketUserType, on_delete=models.SET_NULL, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     is_team_head = models.BooleanField(default=False)
@@ -73,6 +59,7 @@ class User(models.Model):
     team_members = models.ManyToManyField("self", symmetrical=False, related_name="manages", blank=True)
 
     class Meta:
+        db_table = "admin_master_usercreation"
         ordering = ["username"]
 
     def __str__(self):

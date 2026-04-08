@@ -46,6 +46,22 @@ tax_patterns = [
     path('taxes/<int:pk>/toggle/', views.toggle_tax, name='tax-toggle'),
 ]
 
+#Company Creation
+company_patterns = [
+    path('company/', views.list_company),
+    path('company/create/', views.create_company),
+    # path('company/<int:pk>/', views.update_company),
+    path('company/<int:pk>/toggle/', views.toggle_company),
+]
+
+# Project Creation
+project_patterns = [
+    path('projects/', views.list_project),
+    path('projects/create/', views.create_project),
+    # path('projects/<int:pk>/', views.update_project),
+    path('projects/<int:pk>/toggle/', views.toggle_project),
+]
+
 # Dropdown endpoints (placed at end for lower priority)
 dropdown_patterns = [
     path('countries/dropdown/', views.get_countries, name='countries-dropdown'),
@@ -55,4 +71,4 @@ dropdown_patterns = [
 # Combine all patterns
 urlpatterns = [
     path('', include(router.urls)),
-] + country_patterns + continent_patterns + state_patterns + city_patterns + tax_patterns + dropdown_patterns
+] + country_patterns + continent_patterns + state_patterns + city_patterns + tax_patterns + dropdown_patterns + company_patterns + project_patterns

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import MainScreen, User, UserScreen, UserType, UserTypePermission
+from .models import MainScreen, UserCreation, UserScreen, UserType, UserTypePermission
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -9,7 +9,7 @@ class UserSerializer(serializers.ModelSerializer):
     user_type_name = serializers.CharField(source="user_type.name", read_only=True)
 
     class Meta:
-        model = User
+        model = UserCreation
         fields = "__all__"
 
 

@@ -1,3 +1,6 @@
+from decimal import Decimal
+from typing import cast
+
 from django.db import models
 
 
@@ -68,10 +71,22 @@ class ItemMaster(models.Model):
     reorder_level = models.IntegerField(default=0)
     reorder_qty = models.IntegerField(default=0)
     purchase_lead_time = models.IntegerField(default=0)
-    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    unit_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=cast(Decimal, 0),
+    )
     hsn_code = models.CharField(max_length=50, blank=True, null=True)
-    tolerance = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    tax = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    tolerance = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=cast(Decimal, 0),
+    )
+    tax = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=cast(Decimal, 0),
+    )
     description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -81,15 +96,8 @@ class ItemMaster(models.Model):
         return self.item_name
 
 
-class Company(models.Model):
-    company_name = models.CharField(max_length=150)
-
-    def __str__(self):
-        return self.company_name
-
-
 class ProductCreation(models.Model):
-    company = models.ForeignKey(Company, on_delete=models.CASCADE)
+    company = models.ForeignKey("common_master.Company", on_delete=models.CASCADE)
     group = models.ForeignKey(ItemGroup, on_delete=models.SET_NULL, null=True, blank=True)
     sub_group = models.ForeignKey(SubGroup, on_delete=models.SET_NULL, null=True, blank=True)
     product_name = models.CharField(max_length=255)
@@ -118,4 +126,5 @@ class StandardBOMItem(models.Model):
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
-        return f"{self.bom_id} - {self.item.item_name}"
+        bom_pk = self.bom.pk if self.bom else None
+        return f"{bom_pk} - {self.item.item_name}"

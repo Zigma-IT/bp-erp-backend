@@ -60,7 +60,7 @@ class CommonMaster(models.Model):
     def __str__(self):
         return self.name
 
-
+#City
 class City(models.Model):
     country = models.ForeignKey(
         Country,
@@ -85,7 +85,7 @@ class City(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "city"
+        db_table = "common_master_city"
         unique_together = ("state", "name")
         indexes = [
             models.Index(fields=["state"]),
@@ -96,7 +96,7 @@ class City(models.Model):
     def __str__(self):
         return self.name
 
-
+# tax 
 class Tax(models.Model):
     country = models.ForeignKey(
         Country,
@@ -111,13 +111,99 @@ class Tax(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "tax"
+        db_table = "common_master_tax"
         unique_together = ("country", "name")
         indexes = [
             models.Index(fields=["name"]),
             models.Index(fields=["country"]),
         ]
         ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+#Company Creation
+class Company(models.Model):
+    name = models.CharField(max_length=255)
+    code = models.CharField(max_length=50, unique=True)
+
+    country = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True)
+    state = models.ForeignKey(State, on_delete=models.SET_NULL, null=True)
+    city = models.ForeignKey(City, on_delete=models.SET_NULL, null=True)
+
+    pincode = models.CharField(max_length=10, null=True, blank=True)
+
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+
+    logo = models.ImageField(upload_to='company/logo/', null=True, blank=True)
+    document = models.FileField(upload_to='company/docs/', null=True, blank=True)
+
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "common_master_CompanyCreation"
+        ordering = ["-id"]
+
+    def __str__(self):
+        return self.name
+    
+
+# Project Creation
+class Project(models.Model):
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='projects')
+
+    name = models.CharField(max_length=255)
+    code = models.CharField(max_length=50, unique=True)
+
+    client_name = models.CharField(max_length=255, null=True, blank=True)
+
+    application_type = models.ForeignKey(
+        CommonMaster,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        limit_choices_to={'type': 'APPLICATION_TYPE'}
+    )
+
+    capacity = models.CharField(max_length=100, null=True, blank=True)
+    duration = models.CharField(max_length=100, null=True, blank=True)
+
+    project_date = models.DateField()
+
+    country = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True)
+    state = models.ForeignKey(State, on_delete=models.SET_NULL, null=True)
+    city = models.ForeignKey(City, on_delete=models.SET_NULL, null=True)
+
+    address = models.TextField(null=True, blank=True)
+
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+
+    pincode = models.CharField(max_length=10, null=True, blank=True)
+
+    pan_number = models.CharField(max_length=20, null=True, blank=True)
+    gst_number = models.CharField(max_length=20, null=True, blank=True)
+    gst_reg_date = models.DateField(null=True, blank=True)
+
+    contact_person = models.CharField(max_length=150, null=True, blank=True)
+    contact_number = models.CharField(max_length=15, null=True, blank=True)
+    contact_email = models.EmailField(null=True, blank=True)
+
+    website = models.URLField(null=True, blank=True)
+
+    description = models.TextField(null=True, blank=True)
+
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "common_master_ProjectCreation"
+        ordering = ["-id"]
 
     def __str__(self):
         return self.name

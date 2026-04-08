@@ -4,15 +4,14 @@ from . import views
 
 # Initialize router for ViewSets
 router = DefaultRouter()
-router.register(r'user-types', views.UserTypeViewSet)
 router.register(r'main-screens', views.MainScreenViewSet)
 
-# User endpoints
+# User Creation endpoints
 user_patterns = [
-    path('users/', views.user_list, name='user-list'),
-    path('users/create/', views.create_user, name='user-create'),
-    path('users/<int:pk>/', views.update_user, name='user-update'),
-    path('users/<int:pk>/toggle/', views.toggle_user_status, name='user-toggle'),
+    path('users_creation/', views.user_list, name='user-list'),
+    path('users_creation/create/', views.create_user, name='user-create'),
+    path('users_creation/<int:pk>/', views.update_user, name='user-update'),
+    path('users_creation/<int:pk>/toggle/', views.toggle_user_status, name='user-toggle'),
 ]
 
 # User Screen endpoints
@@ -47,10 +46,10 @@ permission_patterns = [
 
 # Combine all patterns
 urlpatterns = (
-    [path('', include(router.urls))] +
     user_patterns +
     user_screen_patterns +
     user_type_patterns +
     screen_patterns +
-    permission_patterns
+    permission_patterns +
+    [path('', include(router.urls))]
 )
