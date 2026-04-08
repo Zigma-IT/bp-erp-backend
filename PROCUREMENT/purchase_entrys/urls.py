@@ -1,9 +1,88 @@
 from django.urls import path
-from .views import PurchaseOrderCreateView, PurchaseOrderListView, PurchaseOrderLevel1ListView, PurchaseOrderLevel2ListView
 
-urlpatterns = [
-    path('purchase_order/create/', PurchaseOrderCreateView.as_view()),
-    path('purchase_order/list/', PurchaseOrderListView.as_view()),
-    path('po/level_1/list/', PurchaseOrderLevel1ListView.as_view()),
-    path('po/level_2/list/', PurchaseOrderLevel2ListView.as_view()),
+from . import views
+
+
+# Dropdown APIs used by the create/edit purchase-order screens.
+dropdown_patterns = [
+    path("dropdown/companies/", views.company_dropdown, name="company-dropdown"),
+    path("dropdown/projects/", views.project_dropdown, name="project-dropdown"),
+    path("dropdown/suppliers/", views.supplier_dropdown, name="supplier-dropdown"),
+    path("dropdown/products/", views.product_dropdown, name="product-dropdown"),
+    path("dropdown/units/", views.unit_dropdown, name="unit-dropdown"),
+    path("dropdown/taxes/", views.tax_dropdown, name="tax-dropdown"),
+    path("dropdown/po-types/", views.purchase_order_types, name="purchase-order-types"),
 ]
+
+# Main purchase-order APIs.
+purchase_order_patterns = [
+    path("purchase-orders/", views.purchase_order_list, name="purchase-order-list"),
+    path(
+        "purchase-orders/create/",
+        views.create_purchase_order,
+        name="purchase-order-create",
+    ),
+    path(
+        "purchase-orders/<int:pk>/",
+        views.purchase_order_detail,
+        name="purchase-order-detail",
+    ),
+]
+
+# Approval list and action APIs.
+approval_patterns = [
+    path(
+        "purchase-orders/approval-level-1/",
+        views.purchase_order_approval_level_1_list,
+        name="purchase-order-approval-level-1-list",
+    ),
+    path(
+        "purchase-orders/approval-level-2/",
+        views.purchase_order_approval_level_2_list,
+        name="purchase-order-approval-level-2-list",
+    ),
+    path(
+        "purchase-orders/approval-level-3/",
+        views.purchase_order_approval_level_3_list,
+        name="purchase-order-approval-level-3-list",
+    ),
+    path(
+        "purchase-orders/<int:pk>/approvals/<int:level>/",
+        views.update_purchase_order_approval,
+        name="purchase-order-approval-update",
+    ),
+]
+
+# Legacy aliases are kept so the existing frontend can move to the cleaner
+# namespaced URLs without a hard break.
+legacy_patterns = [
+    path("purchase_order/list/", views.purchase_order_list, name="legacy-po-list"),
+    path(
+        "purchase_order/create/",
+        views.create_purchase_order,
+        name="legacy-po-create",
+    ),
+    path(
+        "purchase_order/<int:pk>/",
+        views.purchase_order_detail,
+        name="legacy-po-detail",
+    ),
+    path(
+        "po/level_1/list/",
+        views.purchase_order_approval_level_1_list,
+        name="legacy-po-level-1-list",
+    ),
+    path(
+        "po/level_2/list/",
+        views.purchase_order_approval_level_2_list,
+        name="legacy-po-level-2-list",
+    ),
+    path(
+        "po/level_3/list/",
+        views.purchase_order_approval_level_3_list,
+        name="legacy-po-level-3-list",
+    ),
+]
+
+
+urlpatterns = dropdown_patterns + purchase_order_patterns + approval_patterns + legacy_patterns
