@@ -625,6 +625,7 @@ def item_list(request):
             "group_name": obj.group.group_name,
             "sub_group_name": obj.sub_group.sub_group_name,
             "category_name": obj.category.category_name,
+            "unit_name": obj.unit.unit_name if obj.unit else None,
             "description": obj.description,
             "is_active": obj.is_active
         })

@@ -7,6 +7,27 @@ from .models import User
 from .serializers import UserSerializer
 
 
+def _user_detail_payload(user):
+    """
+    Return a detail payload that matches the frontend edit form expectations.
+
+    The list endpoint already returns a transformed shape, but the edit form
+    also loads a user directly by id. Keeping this payload compatible avoids
+    having the frontend guess at serializer field names.
+    """
+    serialized = UserSerializer(user).data
+    return {
+        **serialized,
+        "name": user.staff.name if user.staff_id else "",
+        "phone": user.mobile or (user.staff.mobile if user.staff_id else ""),
+        "work_location": user.project or "",
+        "role_name": user.role.name if user.role_id else "",
+        "user_type_name": user.user_type.name if user.user_type_id else "",
+        "user_type": user.user_type_id,
+        "raw": serialized,
+    }
+
+
 @api_view(['GET'])
 def user_list(request):
     draw = int(request.GET.get('draw', 1))
@@ -61,12 +82,15 @@ def create_user(request):
     
     return Response(serializer.errors, status=400)
 
-@api_view(['PUT'])
+@api_view(['GET', 'PUT'])
 def update_user(request, pk):
     try:
         user = User.objects.get(pk=pk)
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=404)
+
+    if request.method == "GET":
+        return Response(_user_detail_payload(user))
 
     serializer = UserSerializer(user, data=request.data, partial=True)
 
@@ -162,12 +186,15 @@ def create_user_screen(request):
     return Response(serializer.errors, status=400)
 
 
-@api_view(['PUT'])
+@api_view(['GET', 'PUT'])
 def update_user_screen(request, pk):
     try:
         obj = UserScreen.objects.get(pk=pk)
     except UserScreen.DoesNotExist:
         return Response({"error": "Not found"}, status=404)
+
+    if request.method == "GET":
+        return Response(UserScreenSerializer(obj).data)
 
     serializer = UserScreenSerializer(obj, data=request.data, partial=True)
 
@@ -336,12 +363,15 @@ def create_user_type(request):
     
     return Response(serializer.errors, status=400)
 
-@api_view(['PUT'])
+@api_view(['GET', 'PUT'])
 def update_user_type(request, pk):
     try:
         obj = UserType.objects.get(pk=pk)
     except UserType.DoesNotExist:
         return Response({"error": "Not found"}, status=404)
+
+    if request.method == "GET":
+        return Response(UserTypeSerializer(obj).data)
 
     serializer = UserTypeSerializer(obj, data=request.data, partial=True)
 
@@ -445,12 +475,15 @@ def create_user_type_permission(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(['PUT'])
+@api_view(['GET', 'PUT'])
 def update_user_type_permission(request, pk):
     try:
         obj = UserTypePermission.objects.get(pk=pk)
     except UserTypePermission.DoesNotExist:
         return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "GET":
+        return Response(UserTypePermissionSerializer(obj).data)
 
     serializer = UserTypePermissionSerializer(obj, data=request.data, partial=True)
     
