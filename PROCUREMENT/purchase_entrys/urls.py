@@ -1,6 +1,18 @@
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
 
 from . import views
+
+router = DefaultRouter()
+
+# Rate order
+router.register(r'rate-orders', views.RateOrderViewSet, basename='rate-order')
+
+# GRN
+router.register(r'grn', views.GRNViewSet, basename='grn')
+
+# SRN
+router.register(r'srn', views.SRNViewSet, basename='srn')
 
 
 # Dropdown APIs used by the create/edit purchase-order screens.
@@ -18,15 +30,18 @@ dropdown_patterns = [
 purchase_order_patterns = [
     path("purchase-orders/", views.purchase_order_list, name="purchase-order-list"),
     path(
-        "purchase-orders/create/",
-        views.create_purchase_order,
-        name="purchase-order-create",
-    ),
+        "purchase-orders/create/", views.create_purchase_order,name="purchase-order-create",),
     path(
-        "purchase-orders/<int:pk>/",
-        views.purchase_order_detail,
-        name="purchase-order-detail",
-    ),
+        "purchase-orders/<int:pk>/",views.purchase_order_detail,name="purchase-order-detail",),
+]
+
+purchase_requisition_patterns = [
+    path(
+        "purchase-requisitions/",views.purchase_requisition_approval_list,name="purchase-requisition-approval-list",),
+    path(
+        "purchase-requisitions/create/", views.create_purchase_requisition,name="purchase-requisition-create",),
+    path(
+        "purchase-requisitions/<int:pk>/",views.purchase_requisition_detail,name="purchase-requisition-detail",),
 ]
 
 # Approval list and action APIs.
@@ -84,5 +99,13 @@ legacy_patterns = [
     ),
 ]
 
-
-urlpatterns = dropdown_patterns + purchase_order_patterns + approval_patterns + legacy_patterns
+# Combine all patterns
+urlpatterns = [
+    path("", include(router.urls)),
+] + (
+    dropdown_patterns
+    + purchase_order_patterns
+    + purchase_requisition_patterns
+    + approval_patterns
+    + legacy_patterns
+)

@@ -1,7 +1,16 @@
+import uuid
+
 from django.db import models
 
 
-class Continent(models.Model):
+class UniqueIDMixin(models.Model):
+    unique_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    class Meta:
+        abstract = True
+
+
+class Continent(UniqueIDMixin):
     name = models.CharField(max_length=100, unique=True)
     status = models.BooleanField(default=True)
 
@@ -9,7 +18,7 @@ class Continent(models.Model):
         return self.name
 
 
-class Country(models.Model):
+class Country(UniqueIDMixin):
     continent = models.ForeignKey(
         Continent,
         on_delete=models.CASCADE,
@@ -22,7 +31,8 @@ class Country(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
         unique_together = ("name", "code")
         ordering = ["name"]
 
@@ -30,7 +40,7 @@ class Country(models.Model):
         return self.name
 
 
-class State(models.Model):
+class State(UniqueIDMixin):
     country = models.ForeignKey(
         Country,
         on_delete=models.CASCADE,
@@ -40,7 +50,8 @@ class State(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
         unique_together = ("country", "name")
         ordering = ["name"]
 
@@ -48,12 +59,13 @@ class State(models.Model):
         return self.name
 
 
-class CommonMaster(models.Model):
+class CommonMaster(UniqueIDMixin):
     type = models.CharField(max_length=50)
     name = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
         db_table = "common_master"
         ordering = ["type", "name"]
 
@@ -61,7 +73,7 @@ class CommonMaster(models.Model):
         return self.name
 
 #City
-class City(models.Model):
+class City(UniqueIDMixin):
     country = models.ForeignKey(
         Country,
         on_delete=models.CASCADE,
@@ -84,7 +96,8 @@ class City(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
         db_table = "common_master_city"
         unique_together = ("state", "name")
         indexes = [
@@ -97,7 +110,7 @@ class City(models.Model):
         return self.name
 
 # tax 
-class Tax(models.Model):
+class Tax(UniqueIDMixin):
     country = models.ForeignKey(
         Country,
         on_delete=models.SET_NULL,
@@ -110,7 +123,8 @@ class Tax(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
         db_table = "common_master_tax"
         unique_together = ("country", "name")
         indexes = [
@@ -124,7 +138,7 @@ class Tax(models.Model):
 
 
 #Company Creation
-class Company(models.Model):
+class Company(UniqueIDMixin):
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50, unique=True)
 
@@ -144,7 +158,8 @@ class Company(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
         db_table = "common_master_CompanyCreation"
         ordering = ["-id"]
 
@@ -153,7 +168,7 @@ class Company(models.Model):
     
 
 # Project Creation
-class Project(models.Model):
+class Project(UniqueIDMixin):
     company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='projects')
 
     name = models.CharField(max_length=255)
@@ -201,7 +216,8 @@ class Project(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
         db_table = "common_master_ProjectCreation"
         ordering = ["-id"]
 

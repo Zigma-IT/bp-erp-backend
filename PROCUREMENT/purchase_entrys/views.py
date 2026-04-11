@@ -1,7 +1,9 @@
-from django.db.models import Q
+from typing import Any, cast
+
+from django.db.models import F, Q
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import status, viewsets
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -14,26 +16,54 @@ from PROCUREMENT.schema_utils import (
 )
 from .models import (
     CompanyMaster,
+    GRN,
     ProductMaster,
     ProjectMaster,
     PurchaseOrder,
     PurchaseOrderApproval,
+    PurchaseRequisition,
+    RateOrder,
+    SRN,
     Supplier,
     TaxMaster,
     UnitMaster,
 )
 from .serializers import (
     CompanyDropdownSerializer,
+    GRNSerializer,
     ProductDropdownSerializer,
     ProjectDropdownSerializer,
     PurchaseOrderApprovalActionSerializer,
     PurchaseOrderSerializer,
+    PurchaseRequisitionListRowSerializer,
+    PurchaseRequisitionSerializer,
+    RateOrderSerializer,
+    SRNSerializer,
     SupplierSerializer,
     TaxDropdownSerializer,
     UnitDropdownSerializer,
 )
 
+# Rate order
+class RateOrderViewSet(viewsets.ModelViewSet):
+    queryset = RateOrder.objects.all().order_by('-created_at')
+    serializer_class = RateOrderSerializer
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+
+        supplier = self.request.GET.get('supplier')
+        status = self.request.GET.get('status')
+
+        if supplier:
+            qs = qs.filter(supplier_id=supplier)
+
+        if status:
+            qs = qs.filter(status=status)
+
+        return qs
+
+# Purchase order
 PURCHASE_ORDER_FILTER_PARAMETERS = DATATABLE_PARAMETERS + [
     query_int_parameter("company", "Filter by company id."),
     query_int_parameter("project", "Filter by project id."),
@@ -41,6 +71,21 @@ PURCHASE_ORDER_FILTER_PARAMETERS = DATATABLE_PARAMETERS + [
     query_date_parameter("to_date", "Filter to entry date."),
     query_str_parameter("status", "Filter by workflow or approval status."),
 ]
+
+PURCHASE_REQUISITION_FILTER_PARAMETERS = [
+    query_str_parameter("pr_number", "Filter by requisition number."),
+    query_int_parameter("company", "Filter by company id."),
+    query_int_parameter("project", "Filter by project id."),
+    query_str_parameter("requisition_type", "Filter by requisition type."),
+    query_str_parameter("requisition_for", "Filter by requisition purpose."),
+    query_date_parameter("req_date", "Filter by requisition date."),
+    SEARCH_PARAMETER,
+]
+
+PURCHASE_REQUISITION_LIST_RESPONSE = inline_serializer(
+    name="PurchaseRequisitionListResponse",
+    fields={"data": PurchaseRequisitionListRowSerializer(many=True)},
+)
 
 
 def _parse_datatable_request(request):
@@ -85,6 +130,44 @@ def _apply_purchase_order_filters(queryset, request):
             | Q(project__name__icontains=search_value)
             | Q(supplier__name__icontains=search_value)
             | Q(remarks__icontains=search_value)
+        )
+    return queryset
+
+
+def _apply_purchase_requisition_filters(queryset, request):
+    pr_number = request.GET.get("pr_number")
+    company_id = request.GET.get("company")
+    project_id = request.GET.get("project")
+    requisition_type = request.GET.get("requisition_type")
+    requisition_for = request.GET.get("requisition_for")
+    requisition_date = request.GET.get("req_date") or request.GET.get(
+        "requisition_date"
+    )
+    search_value = request.GET.get("search", "").strip()
+    if not search_value:
+        search_value = request.GET.get("search[value]", "").strip()
+
+    if pr_number:
+        queryset = queryset.filter(pr_number__icontains=pr_number)
+    if company_id:
+        queryset = queryset.filter(company_id=company_id)
+    if project_id:
+        queryset = queryset.filter(project_id=project_id)
+    if requisition_type:
+        queryset = queryset.filter(requisition_type=requisition_type)
+    if requisition_for:
+        queryset = queryset.filter(requisition_for=requisition_for)
+    if requisition_date:
+        queryset = queryset.filter(requisition_date=requisition_date)
+    if search_value:
+        queryset = queryset.filter(
+            Q(pr_number__icontains=search_value)
+            | Q(company__name__icontains=search_value)
+            | Q(project__name__icontains=search_value)
+            | Q(requested_by__icontains=search_value)
+            | Q(requisition_type__icontains=search_value)
+            | Q(requisition_for__icontains=search_value)
+            | Q(status__icontains=search_value)
         )
     return queryset
 
@@ -222,6 +305,32 @@ def _serialize_approval_rows(purchase_orders, meta, current_level):
     return rows
 
 
+def _apply_receipt_filters(queryset, request):
+    from_date = request.GET.get("from")
+    to_date = request.GET.get("to")
+    company = request.GET.get("company")
+    project = request.GET.get("project")
+    supplier = request.GET.get("supplier")
+    status_value = request.GET.get("status")
+
+    if from_date and to_date:
+        queryset = queryset.filter(invoice_date__range=[from_date, to_date])
+
+    if company:
+        queryset = queryset.filter(company_id=company)
+
+    if project:
+        queryset = queryset.filter(project_id=project)
+
+    if supplier:
+        queryset = queryset.filter(supplier_id=supplier)
+
+    if status_value:
+        queryset = queryset.filter(status=status_value)
+
+    return queryset
+
+
 @extend_schema(
     parameters=[
         query_int_parameter("company", "Optional company id to filter products."),
@@ -309,6 +418,7 @@ def purchase_order_types(request):
 
 
 @extend_schema(
+    operation_id="api_purchase_purchase_order_list",
     parameters=PURCHASE_ORDER_FILTER_PARAMETERS,
     responses={200: {"type": "object"}},
 )
@@ -340,7 +450,10 @@ def create_purchase_order(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@extend_schema(responses=PurchaseOrderSerializer)
+@extend_schema(
+    operation_id="api_purchase_purchase_order_detail",
+    responses=PurchaseOrderSerializer,
+)
 @api_view(["GET"])
 def purchase_order_detail(request, pk):
     queryset = PurchaseOrder.objects.select_related(
@@ -428,3 +541,156 @@ def update_purchase_order_approval(request, pk, level):
             }
         )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Purchase Requisition
+@extend_schema(
+    operation_id="api_purchase_entrys_purchase_requisition_list",
+    parameters=PURCHASE_REQUISITION_FILTER_PARAMETERS,
+    responses=PURCHASE_REQUISITION_LIST_RESPONSE,
+)
+@api_view(["GET"])
+def purchase_requisition_approval_list(request):
+    queryset = PurchaseRequisition.objects.select_related("company", "project").order_by(
+        "-requisition_date",
+        "-id",
+    )
+    rows = _apply_purchase_requisition_filters(queryset, request).values(
+        "id",
+        "pr_number",
+        "requisition_for",
+        "requisition_type",
+        "requisition_date",
+        "requested_by",
+        "status",
+        company_name=F("company__name"),
+        project_name=F("project__name"),
+    )
+
+    data = []
+    for index, row in enumerate(rows, start=1):
+        data.append(
+            {
+                "id": row["id"],
+                "sno": index,
+                "pr_number": row["pr_number"],
+                "company_name": row["company_name"],
+                "project_name": row["project_name"],
+                "requisition_for": row["requisition_for"],
+                "requisition_type": row["requisition_type"],
+                "requisition_date": row["requisition_date"],
+                "requested_by": row["requested_by"],
+                "status": row["status"],
+            }
+        )
+
+    return Response({"data": data})
+
+
+@extend_schema(
+    operation_id="api_purchase_entrys_purchase_requisition_create",
+    request=PurchaseRequisitionSerializer,
+    responses=PurchaseRequisitionSerializer,
+)
+@api_view(["POST"])
+def create_purchase_requisition(request):
+    serializer = PurchaseRequisitionSerializer(data=request.data)
+    if serializer.is_valid():
+        purchase_requisition = serializer.save()
+        response_serializer = PurchaseRequisitionSerializer(purchase_requisition)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(
+    operation_id="api_purchase_entrys_purchase_requisition_detail",
+    responses=PurchaseRequisitionSerializer,
+)
+@api_view(["GET"])
+def purchase_requisition_detail(request, pk):
+    purchase_requisition = get_object_or_404(
+        PurchaseRequisition.objects.select_related("company", "project").prefetch_related(
+            "items"
+        ),
+        pk=pk,
+    )
+    serializer = PurchaseRequisitionSerializer(purchase_requisition)
+    return Response(serializer.data)
+
+# GRN
+class GRNViewSet(viewsets.ModelViewSet):
+    queryset = cast(Any, GRN).objects.none()
+    serializer_class = GRNSerializer
+
+    def get_queryset(self):
+        qs = cast(Any, GRN).objects.all().order_by('-created_at')
+        return _apply_receipt_filters(qs, self.request)
+
+    def list(self, request, *args, **kwargs):
+        qs = self.get_queryset().select_related('company', 'project', 'supplier', 'po')
+
+        data = qs.values(
+            'id',
+            'invoice_date',
+            'supplier_invoice_no',
+            'grn_number',
+            'status',
+            company_name=F('company__name'),
+            project_name=F('project__name'),
+            supplier_name=F('supplier__name'),
+            po_number=F('po__po_number'),
+        )
+
+        result = []
+        for i, row in enumerate(data, 1):
+            result.append({
+                "sno": i,
+                "company_name": row['company_name'],
+                "project_name": row['project_name'],
+                "supplier_name": row['supplier_name'],
+                "invoice_date": row['invoice_date'],
+                "po_number": row['po_number'],
+                "grn_number": row['grn_number'],
+                "supplier_invoice_no": row['supplier_invoice_no'],
+                "approve_status": row['status'],
+            })
+
+        return Response({"data": result})
+
+# SRN
+class SRNViewSet(viewsets.ModelViewSet):
+    queryset = cast(Any, SRN).objects.none()
+    serializer_class = SRNSerializer
+
+    def get_queryset(self):
+        qs = cast(Any, SRN).objects.all().order_by('-created_at')
+        return _apply_receipt_filters(qs, self.request)
+
+    def list(self, request, *args, **kwargs):
+        qs = self.get_queryset().select_related('company', 'project', 'supplier', 'po')
+
+        data = qs.values(
+            'id',
+            'invoice_date',
+            'supplier_invoice_no',
+            'srn_number',
+            company_name=F('company__name'),
+            project_name=F('project__name'),
+            supplier_name=F('supplier__name'),
+            po_number=F('po__po_number'),
+        )
+
+        result = []
+        for i, row in enumerate(data, 1):
+            result.append({
+                "sno": i,
+                "company_name": row['company_name'],
+                "project_name": row['project_name'],
+                "supplier_name": row['supplier_name'],
+                "invoice_date": row['invoice_date'],
+                "po_number": row['po_number'],
+                "srn_number": row['srn_number'],
+                "supplier_invoice_no": row['supplier_invoice_no'],
+            })
+
+        return Response({"data": result})

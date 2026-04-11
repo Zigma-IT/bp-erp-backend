@@ -41,12 +41,17 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'common_master',
-    'purchase_master',
-    'purchase_entrys',
     'rest_framework',
     'rest_framework.authtoken',
     'drf_spectacular',
+    'common_master',
+    'purchase_master',
+    'purchase_entrys',
+    'sales',
+    'login_home',
+    'approvals',
+    'reports'
+    
 ]
 
 REST_FRAMEWORK = {
@@ -94,7 +99,7 @@ WSGI_APPLICATION = 'PROCUREMENT.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'BP_TEST',
+        'NAME': 'BP_ERP',
         'USER': 'root',
         'PASSWORD': 'admin@123',
         'HOST': '127.0.0.1',

@@ -1,3 +1,5 @@
+import uuid
+
 from decimal import Decimal
 
 from django.db import models
@@ -5,11 +7,52 @@ from django.utils import timezone
 from common_master.models import Company as CompanyMaster
 from common_master.models import Project as ProjectMaster
 from common_master.models import Tax as TaxMaster
+from purchase_master.models import ItemMaster
 from purchase_master.models import ProductCreation as ProductMaster
 from purchase_master.models import UnitMaster
 
+class UniqueIDMixin(models.Model):
+    unique_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
-class Supplier(models.Model):
+    class Meta:
+        abstract = True
+
+
+# Rate order
+class RateOrder(UniqueIDMixin):
+
+    STATUS_CHOICES = (
+        ('active', 'Active'),
+        ('inactive', 'Inactive'),
+    )
+
+    supplier = models.ForeignKey('Supplier', on_delete=models.CASCADE)
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"RateOrder-{self.pk}"
+
+
+class RateOrderItem(UniqueIDMixin):
+
+    rate_order = models.ForeignKey(
+        RateOrder,
+        related_name='items',
+        on_delete=models.CASCADE
+    )
+
+    item_name = models.CharField(max_length=255)
+
+    rate = models.DecimalField(max_digits=10, decimal_places=3)
+
+    from_date = models.DateField()
+    to_date = models.DateField()
+
+
+class Supplier(UniqueIDMixin):
     name = models.CharField(max_length=255, unique=True)
     gst_no = models.CharField(max_length=20, blank=True, null=True)
     pan_no = models.CharField(max_length=20, blank=True, null=True)
@@ -22,14 +65,14 @@ class Supplier(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
         ordering = ["name"]
 
     def __str__(self):
         return self.name
 
-
-class PurchaseOrder(models.Model):
+# Purchase Order
+class PurchaseOrder(UniqueIDMixin):
     class WorkflowStatus(models.TextChoices):
         DRAFT = "draft", "Draft"
         PENDING_L1 = "pending_l1", "Pending (L1)"
@@ -163,7 +206,7 @@ class PurchaseOrder(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
         ordering = ["-entry_date", "-id"]
 
     def __str__(self):
@@ -259,7 +302,7 @@ class PurchaseOrder(models.Model):
         super().save(*args, **kwargs)
 
 
-class PurchaseOrderItem(models.Model):
+class PurchaseOrderItem(UniqueIDMixin):
     class DiscountType(models.TextChoices):
         PERCENTAGE = "percentage", "Percentage"
         AMOUNT = "amount", "Amount"
@@ -311,7 +354,7 @@ class PurchaseOrderItem(models.Model):
     delivery_date = models.DateField(blank=True, null=True)
     remarks = models.TextField(blank=True, null=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
         ordering = ["id"]
 
     def __str__(self):
@@ -319,7 +362,7 @@ class PurchaseOrderItem(models.Model):
         return f"{purchase_order_pk} - {self.product}"
 
 
-class PurchaseOrderApproval(models.Model):
+class PurchaseOrderApproval(UniqueIDMixin):
     class Level(models.IntegerChoices):
         LEVEL_1 = 1, "Level 1"
         LEVEL_2 = 2, "Level 2"
@@ -356,7 +399,7 @@ class PurchaseOrderApproval(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
         unique_together = ("purchase_order", "level")
         ordering = ["purchase_order_id", "level"]
 
@@ -366,3 +409,302 @@ class PurchaseOrderApproval(models.Model):
         except ValueError:
             level_label = str(self.level)
         return f"{self.purchase_order} - {level_label}"
+
+# Purchase requisition
+
+
+class PurchaseRequisition(UniqueIDMixin):
+
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('foreclosed', 'Foreclosed'),
+        ('po_raised', 'PO Raised'),
+    )
+
+    pr_number = models.CharField(max_length=100, unique=True, blank=True)
+
+    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE)
+    project = models.ForeignKey(ProjectMaster, on_delete=models.CASCADE)
+
+    requisition_for = models.CharField(max_length=100)   # Direct / Indirect
+    requisition_type = models.CharField(max_length=100)  # Regular / Service
+
+    requisition_date = models.DateField()
+
+    requested_by = models.CharField(max_length=255)
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.pr_number
+
+    def generate_pr_number(self):
+        requisition_date = self.requisition_date or timezone.localdate()
+        fy_start = (
+            requisition_date.year
+            if requisition_date.month >= 4
+            else requisition_date.year - 1
+        )
+        fy_end = fy_start + 1
+        company_code = (self.company.code or "GEN").upper()
+        prefix = f"PR/{fy_start}-{fy_end}/{company_code}"
+
+        last_pr_number = (
+            PurchaseRequisition.objects.filter(pr_number__startswith=prefix)
+            .order_by("-id")
+            .values_list("pr_number", flat=True)
+            .first()
+        )
+
+        next_number = 1
+        if last_pr_number:
+            try:
+                next_number = int(last_pr_number.rsplit("/", 1)[1]) + 1
+            except (IndexError, ValueError):
+                next_number = PurchaseRequisition.objects.filter(
+                    pr_number__startswith=prefix
+                ).count() + 1
+
+        return f"{prefix}/{next_number:03d}"
+
+    def save(self, *args, **kwargs):
+        try:
+            company = self.company
+        except CompanyMaster.DoesNotExist:
+            company = None
+        if not self.pr_number and company and company.pk is not None:
+            self.pr_number = self.generate_pr_number()
+        super().save(*args, **kwargs)
+
+
+class PurchaseRequisitionItem(UniqueIDMixin):
+
+    purchase_requisition = models.ForeignKey(
+        PurchaseRequisition,
+        related_name='items',
+        on_delete=models.CASCADE
+    )
+
+    product_name = models.CharField(max_length=255)
+    uom = models.CharField(max_length=50)
+
+    qty = models.DecimalField(max_digits=10, decimal_places=2)
+
+    remarks = models.TextField(blank=True, null=True)
+
+
+class GRN(UniqueIDMixin):
+
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('checked', 'Checked'),
+    )
+
+    grn_number = models.CharField(max_length=100, unique=True, blank=True)
+
+    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE)
+    project = models.ForeignKey(ProjectMaster, on_delete=models.CASCADE)
+
+    po = models.ForeignKey('PurchaseOrder', on_delete=models.CASCADE)
+
+    supplier = models.ForeignKey('Supplier', on_delete=models.CASCADE)
+
+    invoice_date = models.DateField()
+    supplier_invoice_no = models.CharField(max_length=100)
+
+    eway_bill_no = models.CharField(max_length=100, blank=True, null=True)
+    eway_bill_date = models.DateField(blank=True, null=True)
+
+    dc_no = models.CharField(max_length=100, blank=True, null=True)
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    description = models.TextField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.grn_number
+
+    def generate_grn_number(self):
+        invoice_date = self.invoice_date or timezone.localdate()
+        fy_start = invoice_date.year if invoice_date.month >= 4 else invoice_date.year - 1
+        fy_end = fy_start + 1
+        company_code = (self.company.code or "GEN").upper()
+        prefix = f"GRN/{fy_start}-{fy_end}/{company_code}"
+
+        last_grn_number = (
+            GRN.objects.filter(grn_number__startswith=prefix)
+            .order_by("-id")
+            .values_list("grn_number", flat=True)
+            .first()
+        )
+
+        next_number = 1
+        if last_grn_number:
+            try:
+                next_number = int(last_grn_number.rsplit("/", 1)[1]) + 1
+            except (IndexError, ValueError):
+                next_number = GRN.objects.filter(
+                    grn_number__startswith=prefix
+                ).count() + 1
+
+        return f"{prefix}/{next_number:03d}"
+
+    def save(self, *args, **kwargs):
+        try:
+            company = self.company
+        except CompanyMaster.DoesNotExist:
+            company = None
+        if not self.grn_number and company and company.pk is not None:
+            self.grn_number = self.generate_grn_number()
+        super().save(*args, **kwargs)
+
+
+class GRNItem(UniqueIDMixin):
+
+    grn = models.ForeignKey(GRN, related_name='items', on_delete=models.CASCADE)
+
+    product_name = models.CharField(max_length=255)
+    uom = models.CharField(max_length=50)
+
+    order_qty = models.DecimalField(max_digits=10, decimal_places=2)
+    previously_received_qty = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+
+    received_qty = models.DecimalField(max_digits=10, decimal_places=2)
+
+    rate = models.DecimalField(max_digits=10, decimal_places=2)
+    tax_percent = models.DecimalField(max_digits=5, decimal_places=2)
+
+    discount_type = models.CharField(max_length=50, blank=True, null=True)
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    remarks = models.TextField(blank=True, null=True)
+
+
+class SRN(UniqueIDMixin):
+
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('checked', 'Checked'),
+    )
+
+    srn_number = models.CharField(max_length=100, unique=True, blank=True)
+
+    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE)
+    project = models.ForeignKey(ProjectMaster, on_delete=models.CASCADE)
+
+    po = models.ForeignKey('PurchaseOrder', on_delete=models.CASCADE)
+    supplier = models.ForeignKey('Supplier', on_delete=models.CASCADE)
+
+    # 🔹 Dates
+    po_date = models.DateField(null=True, blank=True)
+    invoice_date = models.DateField()
+    tax_invoice_date = models.DateField(null=True, blank=True)
+
+    # 🔹 Invoice
+    supplier_invoice_no = models.CharField(max_length=100)
+    tax_invoice_no = models.CharField(max_length=100, blank=True, null=True)
+
+    # 🔹 Logistics
+    eway_bill_no = models.CharField(max_length=100, blank=True, null=True)
+    eway_bill_date = models.DateField(blank=True, null=True)
+
+    dc_no = models.CharField(max_length=100, blank=True, null=True)
+    delivery_challan_no = models.CharField(max_length=100, blank=True, null=True)
+
+    vehicle_no = models.CharField(max_length=100, blank=True, null=True)
+    transporter = models.CharField(max_length=255, blank=True, null=True)
+
+    received_at = models.CharField(max_length=255)
+
+    # 🔹 Compliance / Flags
+    original_invoice = models.BooleanField(default=False)
+    oem_manual = models.BooleanField(default=False)
+    delivery_challan = models.BooleanField(default=False)
+    test_certificate = models.BooleanField(default=False)
+
+    # 🔹 Additional
+    amd_no = models.CharField(max_length=100, blank=True, null=True)
+    cost_center = models.CharField(max_length=100, blank=True, null=True)
+
+    # 🔹 Charges (Header Level)
+    basic = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+
+    paf = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    freight_charges = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    other_charges = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+
+    total_gst = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    round_off = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+
+    # 🔹 Status
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    description = models.TextField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.srn_number
+
+    def generate_srn_number(self):
+        invoice_date = self.invoice_date or timezone.localdate()
+        fy_start = invoice_date.year if invoice_date.month >= 4 else invoice_date.year - 1
+        fy_end = fy_start + 1
+        company_code = (self.company.code or "GEN").upper()
+        prefix = f"SRN/{fy_start}-{fy_end}/{company_code}"
+
+        last_srn_number = (
+            SRN.objects.filter(srn_number__startswith=prefix)
+            .order_by("-id")
+            .values_list("srn_number", flat=True)
+            .first()
+        )
+
+        next_number = 1
+        if last_srn_number:
+            try:
+                next_number = int(last_srn_number.rsplit("/", 1)[1]) + 1
+            except (IndexError, ValueError):
+                next_number = SRN.objects.filter(
+                    srn_number__startswith=prefix
+                ).count() + 1
+
+        return f"{prefix}/{next_number:03d}"
+
+    def save(self, *args, **kwargs):
+        try:
+            company = self.company
+        except CompanyMaster.DoesNotExist:
+            company = None
+        if not self.srn_number and company and company.pk is not None:
+            self.srn_number = self.generate_srn_number()
+        super().save(*args, **kwargs)
+    
+class SRNItem(UniqueIDMixin):
+
+    srn = models.ForeignKey(SRN, related_name='items', on_delete=models.CASCADE)
+
+    item = models.ForeignKey(ItemMaster, on_delete=models.CASCADE)
+
+    order_qty = models.DecimalField(max_digits=10, decimal_places=2)
+    previously_received_qty = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    received_qty = models.DecimalField(max_digits=10, decimal_places=2)
+
+    rate = models.DecimalField(max_digits=10, decimal_places=2)
+    tax_percent = models.DecimalField(max_digits=5, decimal_places=2)
+
+    discount_type = models.CharField(max_length=50, blank=True, null=True)
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    remarks = models.TextField(blank=True, null=True)

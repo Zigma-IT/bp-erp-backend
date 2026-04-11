@@ -74,7 +74,7 @@ WSGI_APPLICATION = 'MASTERS.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'BP_TEST',
+        'NAME': 'BP_ERP',
         'USER': 'root',
         'PASSWORD': 'admin@123',
         'HOST': '127.0.0.1',

@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Any, Mapping, cast
 
 from django.db import transaction
 from django.utils import timezone
@@ -6,17 +7,55 @@ from rest_framework import serializers
 
 from .models import (
     CompanyMaster,
+    GRN,
+    GRNItem,
     ProductMaster,
     ProjectMaster,
     PurchaseOrder,
     PurchaseOrderApproval,
     PurchaseOrderItem,
+    PurchaseRequisition,
+    PurchaseRequisitionItem,
+    RateOrder,
+    RateOrderItem,
+    SRN,
+    SRNItem,
     Supplier,
     TaxMaster,
     UnitMaster,
 )
 
 
+# Rate order
+
+class RateOrderItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RateOrderItem
+        fields = '__all__'
+        read_only_fields = ['id']
+
+
+class RateOrderSerializer(serializers.ModelSerializer):
+    items = RateOrderItemSerializer(many=True)
+
+    class Meta:
+        model = RateOrder
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at']
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items')
+
+        rate_order = RateOrder.objects.create(**validated_data)
+
+        for item in items_data:
+            RateOrderItem.objects.create(
+                rate_order=rate_order,
+                **item
+            )
+
+        return rate_order
+    
 def _calculate_tax_amount(amount, tax):
     if not amount or not tax:
         return Decimal("0.00")
@@ -384,10 +423,11 @@ class PurchaseOrderApprovalActionSerializer(serializers.Serializer):
 
     def save(self, **kwargs):
         approval = self.context["approval"]
-        approval.status = self.validated_data["status"]
-        approval.approved_net_amount = self.validated_data["approved_net_amount"]
-        approval.approved_gross_amount = self.validated_data["approved_gross_amount"]
-        approval.remarks = self.validated_data.get("remarks", "")
+        validated_data = cast(Mapping[str, Any], self.validated_data)
+        approval.status = validated_data["status"]
+        approval.approved_net_amount = validated_data["approved_net_amount"]
+        approval.approved_gross_amount = validated_data["approved_gross_amount"]
+        approval.remarks = validated_data.get("remarks", "")
         approval.approved_at = (
             timezone.now()
             if approval.status == PurchaseOrderApproval.Status.APPROVED
@@ -405,3 +445,174 @@ class PurchaseOrderApprovalActionSerializer(serializers.Serializer):
         )
         approval.purchase_order.sync_workflow_status()
         return approval
+
+
+class PurchaseRequisitionItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PurchaseRequisitionItem
+        fields = [
+            "id",
+            "product_name",
+            "uom",
+            "qty",
+            "remarks",
+        ]
+        read_only_fields = ["id"]
+
+
+class PurchaseRequisitionListRowSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    sno = serializers.IntegerField()
+    pr_number = serializers.CharField()
+    company_name = serializers.CharField()
+    project_name = serializers.CharField()
+    requisition_for = serializers.CharField()
+    requisition_type = serializers.CharField()
+    requisition_date = serializers.DateField()
+    requested_by = serializers.CharField()
+    status = serializers.CharField()
+
+
+class PurchaseRequisitionSerializer(serializers.ModelSerializer):
+    company_name = serializers.CharField(source="company.name", read_only=True)
+    project_name = serializers.CharField(source="project.name", read_only=True)
+    items = PurchaseRequisitionItemSerializer(many=True)
+
+    class Meta:
+        model = PurchaseRequisition
+        fields = [
+            "id",
+            "pr_number",
+            "company",
+            "company_name",
+            "project",
+            "project_name",
+            "requisition_for",
+            "requisition_type",
+            "requisition_date",
+            "requested_by",
+            "status",
+            "created_at",
+            "items",
+        ]
+        read_only_fields = ["id", "company_name", "project_name", "created_at"]
+
+    def validate(self, attrs):
+        items = attrs.get("items") or []
+        company = attrs["company"]
+        project = attrs["project"]
+
+        if project.company_id != company.id:
+            raise serializers.ValidationError(
+                {"project": "Selected project does not belong to the selected company."}
+            )
+
+        if not items:
+            raise serializers.ValidationError(
+                {"items": "At least one requisition row is required."}
+            )
+
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        items_data = validated_data.pop("items")
+
+        pr = PurchaseRequisition.objects.create(**validated_data)
+
+        for item in items_data:
+            PurchaseRequisitionItem.objects.create(
+                purchase_requisition=pr,
+                **item,
+            )
+
+        return pr
+
+class GRNItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GRNItem
+        fields = '__all__'
+        read_only_fields = ['amount']
+
+
+class GRNSerializer(serializers.ModelSerializer):
+    items = GRNItemSerializer(many=True)
+
+    class Meta:
+        model = GRN
+        fields = '__all__'
+        read_only_fields = ['created_at']
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items')
+
+        grn = GRN.objects.create(**validated_data)
+
+        hundred = Decimal('100')
+
+        for item in items_data:
+            qty = item['received_qty']
+            rate = item['rate']
+            tax = item.get('tax_percent', Decimal('0'))
+            discount = item.get('discount', Decimal('0'))
+
+            base = qty * rate
+            tax_amt = base * (tax / hundred)
+            amount = base + tax_amt - discount
+
+            GRNItem.objects.create(
+                grn=grn,
+                amount=amount,
+                **item
+            )
+
+        return grn
+    
+class SRNItemSerializer(serializers.ModelSerializer):
+    item_name = serializers.CharField(source='item.item_name', read_only=True)
+    item_code = serializers.CharField(source='item.item_code', read_only=True)
+
+    class Meta:
+        model = SRNItem
+        fields = '__all__'
+        read_only_fields = ['amount', 'item_name', 'item_code']
+
+
+class SRNSerializer(serializers.ModelSerializer):
+    items = SRNItemSerializer(many=True)
+
+    class Meta:
+        model = SRN
+        fields = '__all__'
+        read_only_fields = ['created_at']
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items')
+
+        srn = SRN.objects.create(**validated_data)
+
+        hundred = Decimal('100')
+        total_amount = Decimal('0')
+
+        for item in items_data:
+            qty = item['received_qty']
+            rate = item['rate']
+            tax = item.get('tax_percent', Decimal('0'))
+            discount = item.get('discount', Decimal('0'))
+
+            base = qty * rate
+            tax_amt = base * (tax / hundred)
+            amount = base + tax_amt - discount
+
+            total_amount += amount
+
+            SRNItem.objects.create(
+                srn=srn,
+                amount=amount,
+                **item
+            )
+
+        srn.total_amount = total_amount
+        srn.save()
+
+        return srn

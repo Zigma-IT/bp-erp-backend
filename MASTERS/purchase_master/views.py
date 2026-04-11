@@ -1,5 +1,6 @@
 # Units - This file defines the API views for managing units in the purchase_master module of the MASTERS app, including a viewset for CRUD operations on UnitMaster model instances and path-based views for listing units with pagination and search functionality, creating new units, updating existing units, and toggling unit status. The UnitViewSet class provides methods for handling create, update, and delete operations, while the path-based views allow for more customized handling of unit-related API requests, including soft deletion by deactivating units instead of permanently removing them from the database.
 from django.shortcuts import render
+from typing import Any, cast
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import viewsets, status
@@ -264,12 +265,12 @@ def sub_group_list(request):
     data = []
     for obj in queryset:
         data.append({
-            "id": obj.id,
+            "id": obj.pk,
             "sub_group_name": obj.sub_group_name,
             "sub_group_code": obj.sub_group_code,
             "group_name": obj.group.group_name,
             "group_code": obj.group.code,
-            "group_id": obj.group.id,
+            "group_id": obj.group.pk,
             "description": obj.description,
             "is_active": obj.is_active
         })
@@ -390,7 +391,7 @@ def toggle_sub_group(request, pk):
 
 # DROPDOWN (for create page)
 @api_view(['GET'])
-def group_dropdown(request):
+def sub_group_group_dropdown(request):
     groups = ItemGroup.objects.filter(is_active=True).values('id', 'group_name', 'code')
 
     return Response({
@@ -430,7 +431,7 @@ def category_list(request):
     data = []
     for obj in queryset:
         data.append({
-            "id": obj.id,
+            "id": obj.pk,
             "category_name": obj.category_name,
             "category_code": obj.category_code,
             "group_name": obj.group.group_name,
@@ -564,14 +565,14 @@ def toggle_category(request, pk):
 
 # GROUP DROPDOWN
 @api_view(['GET'])
-def group_dropdown(request):
+def category_group_dropdown(request):
     data = ItemGroup.objects.filter(is_active=True).values('id', 'group_name', 'code')
     return Response({"status": True, "data": list(data)})
 
 
 # SUB GROUP DROPDOWN (based on group)
 @api_view(['GET'])
-def sub_group_dropdown(request):
+def category_sub_group_dropdown(request):
     group_id = request.GET.get('group_id')
 
     queryset = SubGroup.objects.filter(is_active=True)
@@ -601,7 +602,7 @@ from .models import UnitMaster
 
 # LIST
 @api_view(['GET'])
-def item_list(request):
+def item_list_legacy(request):
     group_id = request.GET.get('group_id')
     sub_group_id = request.GET.get('sub_group_id')
     category_id = request.GET.get('category_id')
@@ -626,7 +627,7 @@ def item_list(request):
     data = []
     for obj in queryset:
         data.append({
-            "id": obj.id,
+            "id": obj.pk,
             "item_name": obj.item_name,
             "item_code": obj.item_code,
             "group_name": obj.group.group_name,
@@ -641,7 +642,7 @@ def item_list(request):
 
 # CREATE
 @api_view(['POST'])
-def create_item(request):
+def create_item_legacy(request):
     group_id = request.data.get('group_id')
     sub_group_id = request.data.get('sub_group_id')
     category_id = request.data.get('category_id')
@@ -686,7 +687,7 @@ def create_item(request):
 
 # TOGGLE
 @api_view(['PATCH'])
-def toggle_item(request, pk):
+def toggle_item_legacy(request, pk):
     obj = ItemMaster.objects.get(id=pk)
     obj.is_active = not obj.is_active
     obj.save()
@@ -747,7 +748,7 @@ def item_list(request):
     data = []
     for obj in queryset:
         data.append({
-            "id": obj.id,
+            "id": obj.pk,
             "item_name": obj.item_name,
             "item_code": obj.item_code,
             "group_name": obj.group.group_name,
@@ -853,7 +854,7 @@ def product_list(request):
     data = []
     for obj in queryset:
         data.append({
-            "id": obj.id,
+            "id": obj.pk,
             "company_name": obj.company.name if obj.company else None,
             "group_name": obj.group.group_name if obj.group else None,
             "sub_group_name": obj.sub_group.sub_group_name if obj.sub_group else None,
@@ -926,7 +927,7 @@ def toggle_product(request, pk):
 
 @api_view(['GET'])
 def company_dropdown(request):
-    data = [{"id": obj.id, "company_name": obj.name} for obj in Company.objects.all()]
+    data = [{"id": obj.pk, "company_name": obj.name} for obj in Company.objects.all()]
     return Response({"status": True, "data": data})
 
 
@@ -1009,8 +1010,9 @@ def create_bom(request):
                 "errors": serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        product_id = serializer.validated_data.get('product_id')
-        items = serializer.validated_data.get('items')
+        validated_data = cast(dict[str, Any], serializer.validated_data)
+        product_id = cast(int, validated_data.get('product_id'))
+        items = cast(list[dict[str, Any]], validated_data.get('items', []))
 
         # Get product
         try:
@@ -1088,7 +1090,7 @@ def update_bom(request, pk):
     """Update BOM items"""
     try:
         bom = StandardBOM.objects.get(id=pk)
-        items = request.data.get('items', [])
+        items = cast(list[dict[str, Any]], request.data.get('items', []))
 
         if not items:
             return Response({
@@ -1097,7 +1099,7 @@ def update_bom(request, pk):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # Delete existing items
-        bom.items.all().delete()
+        StandardBOMItem.objects.filter(bom=bom).delete()
 
         # Create new items
         for row in items:

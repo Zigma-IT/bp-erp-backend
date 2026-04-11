@@ -1,10 +1,19 @@
+import uuid
+
 from decimal import Decimal
 from typing import cast
 
 from django.db import models
 
 
-class UnitMaster(models.Model):
+class UniqueIDMixin(models.Model):
+    unique_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    class Meta:
+        abstract = True
+
+
+class UnitMaster(UniqueIDMixin):
     unit_name = models.CharField(max_length=50, unique=True)
     decimal_points = models.IntegerField(default=0)
     description = models.TextField(blank=True, null=True)
@@ -16,7 +25,7 @@ class UnitMaster(models.Model):
         return self.unit_name
 
 
-class ItemGroup(models.Model):
+class ItemGroup(UniqueIDMixin):
     group_name = models.CharField(max_length=100, unique=True)
     code = models.CharField(max_length=20, unique=True)
     description = models.TextField(blank=True, null=True)
@@ -28,7 +37,7 @@ class ItemGroup(models.Model):
         return f"{self.group_name} ({self.code})"
 
 
-class SubGroup(models.Model):
+class SubGroup(UniqueIDMixin):
     group = models.ForeignKey(ItemGroup, on_delete=models.CASCADE, related_name="sub_groups")
     sub_group_name = models.CharField(max_length=100)
     sub_group_code = models.CharField(max_length=20)
@@ -37,14 +46,15 @@ class SubGroup(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
         unique_together = ("group", "sub_group_name")
 
     def __str__(self):
         return f"{self.sub_group_name} ({self.sub_group_code})"
 
 
-class Category(models.Model):
+class Category(UniqueIDMixin):
     group = models.ForeignKey(ItemGroup, on_delete=models.CASCADE, related_name="categories")
     sub_group = models.ForeignKey(SubGroup, on_delete=models.CASCADE, related_name="categories")
     category_name = models.CharField(max_length=100)
@@ -54,14 +64,15 @@ class Category(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
         unique_together = ("sub_group", "category_name")
 
     def __str__(self):
         return f"{self.category_name} ({self.category_code})"
 
 
-class ItemMaster(models.Model):
+class ItemMaster(UniqueIDMixin):
     group = models.ForeignKey(ItemGroup, on_delete=models.CASCADE)
     sub_group = models.ForeignKey(SubGroup, on_delete=models.CASCADE)
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
@@ -96,7 +107,7 @@ class ItemMaster(models.Model):
         return self.item_name
 
 
-class ProductCreation(models.Model):
+class ProductCreation(UniqueIDMixin):
     company = models.ForeignKey("common_master.Company", on_delete=models.CASCADE)
     group = models.ForeignKey(ItemGroup, on_delete=models.SET_NULL, null=True, blank=True)
     sub_group = models.ForeignKey(SubGroup, on_delete=models.SET_NULL, null=True, blank=True)
@@ -109,7 +120,7 @@ class ProductCreation(models.Model):
         return self.product_name
 
 
-class StandardBOM(models.Model):
+class StandardBOM(UniqueIDMixin):
     product = models.ForeignKey(ProductCreation, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -117,7 +128,7 @@ class StandardBOM(models.Model):
         return f"BOM - {self.product.product_name}"
 
 
-class StandardBOMItem(models.Model):
+class StandardBOMItem(UniqueIDMixin):
     bom = models.ForeignKey(StandardBOM, on_delete=models.CASCADE, related_name="items")
     item = models.ForeignKey(ItemMaster, on_delete=models.CASCADE)
     qty = models.DecimalField(max_digits=10, decimal_places=2)

@@ -1,0 +1,437 @@
+from django.db.models import Q
+from django.db.models import F
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import status, viewsets
+from rest_framework.decorators import action, api_view
+from rest_framework.response import Response
+
+from PROCUREMENT.schema_utils import (
+    SEARCH_PARAMETER,
+    query_date_parameter,
+    query_int_parameter,
+    query_str_parameter,
+)
+from purchase_entrys.models import GRN, PurchaseRequisition, SRN
+from sales.models import SalesOrder
+
+from .serializers import (
+    GRNApprovalLevel1Serializer,
+    GRNApprovalLevel2Serializer,
+    PRApprovalLevel1Serializer,
+    PRApprovalLevel2Serializer,
+    SalesOrderApprovalDetailSerializer,
+    SalesOrderApprovalListRowSerializer,
+    SRNApprovalLevel1Serializer,
+    SRNApprovalLevel2Serializer,
+)
+
+# Sales order approval
+
+APPROVAL_FILTER_PARAMETERS = [
+    query_int_parameter("company", "Filter by company id."),
+    query_int_parameter("customer", "Filter by customer id."),
+    query_str_parameter("active_status", "Filter by active status."),
+    query_str_parameter("status", "Filter by approval status."),
+    query_date_parameter("from_date", "Filter from entry date."),
+    query_date_parameter("to_date", "Filter to entry date."),
+    SEARCH_PARAMETER,
+]
+
+SALES_ORDER_APPROVAL_LIST_RESPONSE = inline_serializer(
+    name="SalesOrderApprovalListResponse",
+    fields={"data": SalesOrderApprovalListRowSerializer(many=True)},
+)
+
+
+def _approval_queryset(request):
+    queryset = SalesOrder.objects.select_related("company", "customer").order_by(
+        "-entry_date",
+        "-id",
+    )
+
+    company_id = request.GET.get("company")
+    customer_id = request.GET.get("customer")
+    active_status = request.GET.get("active_status")
+    status_filter = request.GET.get("status")
+    from_date = request.GET.get("from_date")
+    to_date = request.GET.get("to_date")
+    search_value = request.GET.get("search", "").strip()
+    if not search_value:
+        search_value = request.GET.get("search[value]", "").strip()
+
+    if company_id:
+        queryset = queryset.filter(company_id=company_id)
+    if customer_id:
+        queryset = queryset.filter(customer_id=customer_id)
+    if active_status:
+        queryset = queryset.filter(active_status=active_status)
+    if status_filter and status_filter.lower() != "all":
+        queryset = queryset.filter(status=status_filter)
+    if from_date:
+        queryset = queryset.filter(entry_date__gte=from_date)
+    if to_date:
+        queryset = queryset.filter(entry_date__lte=to_date)
+    if search_value:
+        queryset = queryset.filter(
+            Q(so_number__icontains=search_value)
+            | Q(company__name__icontains=search_value)
+            | Q(customer__name__icontains=search_value)
+            | Q(so_type__icontains=search_value)
+            | Q(active_status__icontains=search_value)
+            | Q(status__icontains=search_value)
+        )
+
+    return queryset
+
+
+@extend_schema(
+    operation_id="api_approvals_sales_order_approval_list",
+    parameters=APPROVAL_FILTER_PARAMETERS,
+    responses=SALES_ORDER_APPROVAL_LIST_RESPONSE,
+)
+@api_view(["GET"])
+def sales_order_approval_list(request):
+    queryset = _approval_queryset(request)
+    rows = queryset.values(
+        "id",
+        "entry_date",
+        "so_number",
+        "so_type",
+        "active_status",
+        "status",
+        company_name=F("company__name"),
+        customer_name=F("customer__name"),
+    )
+
+    data = []
+    for index, row in enumerate(rows, start=1):
+        data.append(
+            {
+                "id": row["id"],
+                "sno": index,
+                "entry_date": row["entry_date"],
+                "sales_order_no": row["so_number"],
+                "company_name": row["company_name"],
+                "customer_name": row["customer_name"],
+                "so_type": row["so_type"],
+                "active_status": row["active_status"],
+                "approve_status": row["status"],
+            }
+        )
+
+    return Response({"data": data})
+
+
+@extend_schema(
+    operation_id="api_approvals_sales_order_approval_detail",
+    responses=SalesOrderApprovalDetailSerializer,
+)
+@api_view(["GET"])
+def sales_order_approval_detail(request, pk):
+    sales_order = get_object_or_404(
+        SalesOrder.objects.select_related("company", "customer").prefetch_related(
+            "items__product",
+            "items__unit",
+        ),
+        pk=pk,
+    )
+    serializer = SalesOrderApprovalDetailSerializer(sales_order)
+    return Response(serializer.data)
+
+
+# Purchase Rquisition Approval Level 1
+class PRApprovalLevel1ViewSet(viewsets.ModelViewSet):
+    queryset = PurchaseRequisition.objects.all()
+    serializer_class = PRApprovalLevel1Serializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # Only show Level 1 relevant records
+        status_param = self.request.query_params.get('status')
+
+        if status_param:
+            queryset = queryset.filter(level1_status=status_param)
+
+        return queryset.order_by('-id')
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        pr = self.get_object()
+
+        pr.level1_status = 'approved'
+        pr.level1_approved_by = request.user
+        pr.level1_approved_at = timezone.now()
+        pr.save()
+
+        return Response({'message': 'Level 1 Approved'})
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        pr = self.get_object()
+
+        pr.level1_status = 'rejected'
+        pr.level1_remarks = request.data.get('remarks')
+        pr.level1_approved_by = request.user
+        pr.level1_approved_at = timezone.now()
+        pr.save()
+
+        return Response({'message': 'Level 1 Rejected'})
+    
+
+# Purchase Requisition Approval Level2
+class PRApprovalLevel2ViewSet(viewsets.ModelViewSet):
+    queryset = PurchaseRequisition.objects.all()
+    serializer_class = PRApprovalLevel2Serializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset().filter(level1_status='approved')
+
+        status_param = self.request.query_params.get('level2_status')
+        if status_param:
+            queryset = queryset.filter(level2_status=status_param)
+
+        return queryset.order_by('-id')
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        pr = self.get_object()
+
+        # paste here
+        if pr.level1_status != 'approved':
+            return Response(
+                {'error': 'Level 1 approval pending'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        pr.level2_status = 'approved'
+        pr.level2_approved_by = request.user
+        pr.level2_approved_at = timezone.now()
+        pr.save()
+
+        return Response({'message': 'Level 2 Approved'})
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        pr = self.get_object()
+
+        # paste here also
+        if pr.level1_status != 'approved':
+            return Response(
+                {'error': 'Level 1 approval pending'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        pr.level2_status = 'rejected'
+        pr.level2_remarks = request.data.get('remarks')
+        pr.level2_approved_by = request.user
+        pr.level2_approved_at = timezone.now()
+        pr.save()
+
+        return Response({'message': 'Level 2 Rejected'})
+    
+# GRN Approval Level 1
+class GRNApprovalLevel1ViewSet(viewsets.ModelViewSet):
+    queryset = GRN.objects.all()
+    serializer_class = GRNApprovalLevel1Serializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            queryset = queryset.filter(level1_status=status_param)
+
+        return queryset.order_by('-id')
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        grn = self.get_object()
+
+        grn.level1_status = 'approved'
+        grn.level1_approved_by = request.user
+        grn.level1_approved_at = timezone.now()
+        grn.save()
+
+        return Response({'message': 'GRN Level 1 Approved'})
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        grn = self.get_object()
+
+        grn.level1_status = 'rejected'
+        grn.level1_remarks = request.data.get('remarks')
+        grn.level1_approved_by = request.user
+        grn.level1_approved_at = timezone.now()
+        grn.save()
+
+        return Response({'message': 'GRN Level 1 Rejected'})
+    
+# GRN Approval Level 2
+class GRNApprovalLevel2ViewSet(viewsets.ModelViewSet):
+    queryset = GRN.objects.all()
+    serializer_class = GRNApprovalLevel2Serializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # ONLY Level 1 approved GRNs
+        queryset = queryset.filter(level1_status='approved')
+
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            queryset = queryset.filter(level2_status=status_param)
+
+        return queryset.order_by('-id')
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        grn = self.get_object()
+
+        # 🔴 critical validation
+        if grn.level1_status != 'approved':
+            return Response({'error': 'Level 1 approval pending'}, status=400)
+
+        grn.level2_status = 'approved'
+        grn.level2_checked_by = request.user
+        grn.level2_checked_at = timezone.now()
+        grn.save()
+
+        return Response({'message': 'GRN Level 2 Approved'})
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        grn = self.get_object()
+
+        if grn.level1_status != 'approved':
+            return Response({'error': 'Level 1 approval pending'}, status=400)
+
+        grn.level2_status = 'rejected'
+        grn.level2_remarks = request.data.get('remarks')
+        grn.level2_checked_by = request.user
+        grn.level2_checked_at = timezone.now()
+        grn.save()
+
+        return Response({'message': 'GRN Level 2 Rejected'})
+    
+
+# SRN Approval Level 1
+class SRNApprovalLevel1ViewSet(viewsets.ModelViewSet):
+    queryset = SRN.objects.all()
+    serializer_class = SRNApprovalLevel1Serializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # filters from UI
+        company = self.request.query_params.get('company')
+        project = self.request.query_params.get('project')
+        supplier = self.request.query_params.get('supplier')
+        status = self.request.query_params.get('status')
+        from_date = self.request.query_params.get('from')
+        to_date = self.request.query_params.get('to')
+
+        if company:
+            queryset = queryset.filter(company_id=company)
+
+        if project:
+            queryset = queryset.filter(project_id=project)
+
+        if supplier:
+            queryset = queryset.filter(supplier_id=supplier)
+
+        if status:
+            queryset = queryset.filter(level1_status=status)
+
+        if from_date and to_date:
+            queryset = queryset.filter(invoice_date__range=[from_date, to_date])
+
+        return queryset.order_by('-id')
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        srn = self.get_object()
+
+        srn.level1_status = 'approved'
+        srn.level1_approved_by = request.user
+        srn.level1_approved_at = timezone.now()
+        srn.save()
+
+        return Response({'message': 'SRN Approved (Level 1)'})
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        srn = self.get_object()
+
+        srn.level1_status = 'rejected'
+        srn.level1_remarks = request.data.get('remarks')
+        srn.level1_approved_by = request.user
+        srn.level1_approved_at = timezone.now()
+        srn.save()
+
+        return Response({'message': 'SRN Rejected (Level 1)'})
+    
+
+
+# SRN Approval Level 2
+class SRNApprovalLevel2ViewSet(viewsets.ModelViewSet):
+    queryset = SRN.objects.all()    
+    serializer_class = SRNApprovalLevel2Serializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        company = self.request.query_params.get('company')
+        project = self.request.query_params.get('project')
+        supplier = self.request.query_params.get('supplier')
+        status = self.request.query_params.get('status')
+        from_date = self.request.query_params.get('from')
+        to_date = self.request.query_params.get('to')
+
+        if company:
+            queryset = queryset.filter(company_id=company)
+
+        if project:
+            queryset = queryset.filter(project_id=project)
+
+        if supplier:
+            queryset = queryset.filter(supplier_id=supplier)
+
+        if status:
+            queryset = queryset.filter(level2_status=status)
+
+        if from_date and to_date:
+            queryset = queryset.filter(invoice_date__range=[from_date, to_date])
+
+        # 🔥 IMPORTANT: Only Level 1 approved items should appear here
+        queryset = queryset.filter(level1_status='approved')
+
+        return queryset.order_by('-id')
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        srn = self.get_object()
+
+        if srn.level1_status != 'approved':
+            return Response({'error': 'Level 1 not approved'}, status=400)
+
+        srn.level2_status = 'approved'
+        srn.level2_approved_by = request.user
+        srn.level2_approved_at = timezone.now()
+        srn.save()
+
+        return Response({'message': 'SRN Approved (Level 2)'})
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        srn = self.get_object()
+
+        srn.level2_status = 'rejected'
+        srn.level2_remarks = request.data.get('remarks')
+        srn.level2_approved_by = request.user
+        srn.level2_approved_at = timezone.now()
+        srn.save()
+
+        return Response({'message': 'SRN Rejected (Level 2)'})
