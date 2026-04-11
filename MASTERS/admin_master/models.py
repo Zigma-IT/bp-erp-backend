@@ -1,15 +1,23 @@
+import uuid
 from django.contrib.auth.hashers import make_password
 from django.db import models
 
 
-class Role(models.Model):
+class UniqueIDMixin(models.Model):
+    unique_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    class Meta:
+        abstract = True
+
+
+class Role(UniqueIDMixin):
     name = models.CharField(max_length=100)
 
     def __str__(self):
         return self.name
 
 
-class UserType(models.Model):
+class UserType(UniqueIDMixin):
     name = models.CharField(max_length=150, unique=True, db_index=True)
     is_active = models.BooleanField(default=True, db_index=True)
     under_users = models.CharField(max_length=150, null=True, blank=True)
@@ -19,35 +27,22 @@ class UserType(models.Model):
     user_wise = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
         ordering = ["name"]
 
     def __str__(self):
         return self.name
 
 
-class TicketUserType(models.Model):
+class TicketUserType(UniqueIDMixin):
     name = models.CharField(max_length=100)
 
     def __str__(self):
         return self.name
 
 
-class Company(models.Model):
-    name = models.CharField(max_length=150)
-
-    def __str__(self):
-        return self.name
-
-
-class Department(models.Model):
-    name = models.CharField(max_length=150)
-
-    def __str__(self):
-        return self.name
-
-
-class Staff(models.Model):
+class Staff(UniqueIDMixin):
     name = models.CharField(max_length=150)
     mobile = models.CharField(max_length=15)
 
@@ -55,7 +50,7 @@ class Staff(models.Model):
         return self.name
 
 
-class User(models.Model):
+class UserCreation(UniqueIDMixin):
     role = models.ForeignKey(Role, on_delete=models.CASCADE)
     staff = models.ForeignKey(Staff, on_delete=models.CASCADE)
     username = models.CharField(max_length=150, unique=True)
@@ -64,15 +59,17 @@ class User(models.Model):
     mobile = models.CharField(max_length=15, null=True, blank=True)
     project = models.CharField(max_length=150, null=True, blank=True)
     under_users = models.CharField(max_length=150, null=True, blank=True)
-    company = models.ForeignKey(Company, on_delete=models.SET_NULL, null=True, blank=True)
-    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
+    company = models.ForeignKey("common_master.Company", on_delete=models.SET_NULL, null=True, blank=True)
+    department = models.ForeignKey("login_home.Department", on_delete=models.SET_NULL, null=True, blank=True)
     ticket_user_type = models.ForeignKey(TicketUserType, on_delete=models.SET_NULL, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     is_team_head = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     team_members = models.ManyToManyField("self", symmetrical=False, related_name="manages", blank=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
+        db_table = "admin_master_usercreation"
         ordering = ["username"]
 
     def __str__(self):
@@ -84,30 +81,32 @@ class User(models.Model):
         super().save(*args, **kwargs)
 
 
-class MainScreen(models.Model):
+class MainScreen(UniqueIDMixin):
     name = models.CharField(max_length=150, unique=True)
     code = models.CharField(max_length=100, blank=True, null=True)
     status = models.BooleanField(default=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
         ordering = ["name"]
 
     def __str__(self):
         return self.name
 
 
-class ScreenSection(models.Model):
+class ScreenSection(UniqueIDMixin):
     name = models.CharField(max_length=150)
     main_screen = models.ForeignKey(MainScreen, on_delete=models.CASCADE, related_name="sections")
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
         ordering = ["name"]
 
     def __str__(self):
         return self.name
 
 
-class UserScreen(models.Model):
+class UserScreen(UniqueIDMixin):
     main_screen = models.ForeignKey(MainScreen, on_delete=models.CASCADE)
     screen_section = models.ForeignKey(ScreenSection, on_delete=models.CASCADE)
     screen_name = models.CharField(max_length=150, db_index=True)
@@ -124,14 +123,15 @@ class UserScreen(models.Model):
     can_print = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
         ordering = ["order_no"]
 
     def __str__(self):
         return self.screen_name
 
 
-class UserTypePermission(models.Model):
+class UserTypePermission(UniqueIDMixin):
     user_type = models.ForeignKey(UserType, on_delete=models.CASCADE)
     main_screen = models.ForeignKey(MainScreen, on_delete=models.CASCADE)
     can_view = models.BooleanField(default=True)
@@ -142,7 +142,8 @@ class UserTypePermission(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
         unique_together = ("user_type", "main_screen")
         ordering = ["user_type__name", "main_screen__name"]
 

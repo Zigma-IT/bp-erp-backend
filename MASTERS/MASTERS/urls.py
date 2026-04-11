@@ -6,7 +6,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api-token-auth/', obtain_auth_token, name='api_token_auth'),
-    # Admin & User Management Routes
+    # Login page and Home page URls
     path('api/admin/', include('login_home.urls')),
     path('api/users/', include('admin_master.urls')),
     # Common Master Routes (Countries, States, Cities, Taxes)

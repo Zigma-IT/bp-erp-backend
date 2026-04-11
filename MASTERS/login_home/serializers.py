@@ -1,10 +1,11 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from drf_spectacular.utils import extend_schema_serializer
 from rest_framework import serializers
 
 from .models import Department, Employee, ManualAttendance
 
-
+@extend_schema_serializer(component_name="AuthUser")
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User

@@ -11,9 +11,14 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+import sys
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+MASTERS_DIR = BASE_DIR.parent / "MASTERS"
+
+if str(MASTERS_DIR) not in sys.path:
+    sys.path.insert(0, str(MASTERS_DIR))
 
 
 # Quick-start development settings - unsuitable for production
@@ -25,8 +30,7 @@ SECRET_KEY = 'django-insecure-$#su%qe)&g)w)p#b-tyb4jn2uskgpap@teh=t5l7^+msh4h1m7
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
+ALLOWED_HOSTS = ['0.0.0.0', 'localhost', '127.0.0.1']
 
 # Application definition
 
@@ -37,10 +41,17 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'purchase_entrys',
     'rest_framework',
     'rest_framework.authtoken',
     'drf_spectacular',
+    'common_master',
+    'purchase_master',
+    'purchase_entrys',
+    'sales',
+    'login_home',
+    'approvals',
+    'reports'
+    
 ]
 
 REST_FRAMEWORK = {
@@ -88,7 +99,7 @@ WSGI_APPLICATION = 'PROCUREMENT.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'BP_TEST',
+        'NAME': 'BP_ERP',
         'USER': 'root',
         'PASSWORD': 'admin@123',
         'HOST': '127.0.0.1',
