@@ -44,7 +44,10 @@ permission_patterns = [
     path('user-permissions/<int:pk>/toggle/', views.toggle_user_type_permission, name='user-permission-toggle'),
 ]
 
-# Combine all patterns
+# Combine all patterns.
+# Put explicit path routes first so they win over router detail routes like
+# /user-types/<pk>/ and /main-screens/<pk>/, which would otherwise capture
+# "create" or "list" as a pk and return 405/404 responses.
 urlpatterns = (
     user_patterns +
     user_screen_patterns +

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -13,7 +14,21 @@ SECRET_KEY = 'django-insecure-rc2yf8g_b69*$u)x3w34=b3)#$qku5uv7f3o2a$l!9od3rj#^y
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
+<<<<<<< HEAD
 ALLOWED_HOSTS = ['0.0.0.0', 'localhost', '127.0.0.1']
+=======
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+>>>>>>> origin/dev
 
 
 # Application definition
@@ -25,12 +40,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'rest_framework',
     'rest_framework.authtoken',
-    'login_home',
-    'admin_master',
-    'common_master',
-    'purchase_master',
+    'login_home.apps.LoginConfig',
+    'admin_master.apps.AdminMasterConfig',
+    'common_master.apps.CommonMasterConfig',
+    'purchase_master.apps.PurchaseMasterConfig',
     'drf_spectacular',
 ]
 REST_FRAMEWORK = {
@@ -39,6 +55,7 @@ REST_FRAMEWORK = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -70,8 +87,8 @@ WSGI_APPLICATION = 'MASTERS.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-# Uncomment for MySQL/MariaDB in production:
 DATABASES = {
+<<<<<<< HEAD
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'BP_ERP',
@@ -84,6 +101,20 @@ DATABASES = {
             'charset': 'utf8mb4',
             'use_unicode': True,
         }
+=======
+    "default": {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": os.getenv("DJANGO_DB_NAME", "BP_ERP"),
+        "USER": os.getenv("DJANGO_DB_USER", "root"),
+        "PASSWORD": os.getenv("DJANGO_DB_PASSWORD", "admin@123"),
+        "HOST": os.getenv("DJANGO_DB_HOST", "127.0.0.1"),
+        "PORT": os.getenv("DJANGO_DB_PORT", "3306"),
+        "OPTIONS": {
+            "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+            "charset": "utf8mb4",
+            "use_unicode": True,
+        },
+>>>>>>> origin/dev
     }
 }
 
