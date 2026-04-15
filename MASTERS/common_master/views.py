@@ -1,15 +1,20 @@
 from django.db.models import Q
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from .models import City, CommonMaster, Continent, Country, State, Tax
+from MASTERS.schema_utils import DATATABLE_PARAMETERS
+from .models import City, CommonMaster, Continent, Country, State, Tax, Company, Project
 from .serializers import (
     CitySerializer,
     ContinentSerializer,
     CountrySerializer,
     StateSerializer,
     TaxSerializer,
+    CompanySerializer,
+    ProjectSerializer
 )
 
 
@@ -413,3 +418,274 @@ def get_tax(request, pk):
 
     serializer = TaxSerializer(tax)
     return Response(serializer.data)
+
+
+# Company Creation
+@api_view(["GET"])
+def list_company(request):
+    search = request.GET.get("search[value]", "")
+    start = int(request.GET.get("start", 0))
+    length = int(request.GET.get("length", 10))
+    draw = int(request.GET.get("draw", 1))
+
+    base_queryset = Company.objects.select_related("country", "state", "city")
+    queryset = base_queryset
+
+    if search:
+        queryset = queryset.filter(
+            Q(name__icontains=search) |
+            Q(code__icontains=search) |
+            Q(city__name__icontains=search)
+        )
+
+    total = base_queryset.count()
+    filtered = queryset.count()
+
+    companies = queryset[start:start+length]
+
+    data = []
+    for i, obj in enumerate(companies, start=1):
+        data.append({
+            "sno": start + i,
+            "company_name": obj.name,
+            "company_code": obj.code,
+            "state": obj.state.name if obj.state else "",
+            "city": obj.city.name if obj.city else "",
+            "pincode": obj.pincode,
+            "latitude": obj.latitude,
+            "longitude": obj.longitude,
+            "logo": obj.logo.url if obj.logo else "",
+            "document": obj.document.url if obj.document else "",
+            "status": "Active" if obj.is_active else "Inactive",
+            "id": obj.id
+        })
+
+    return Response({
+        "draw": draw,
+        "recordsTotal": total,
+        "recordsFiltered": filtered,
+        "data": data
+    })
+
+@api_view(["POST"])
+def create_company(request):
+    serializer = CompanySerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response({"status": True, "message": "Created"})
+    return Response({"status": False, "errors": serializer.errors})
+
+
+@api_view(["PATCH"])
+def toggle_company(request, pk):
+    obj = Company.objects.get(pk=pk)
+    obj.is_active = not obj.is_active
+    obj.save(update_fields=["is_active"])
+    return Response({"status": True})
+
+# Project Creation
+@api_view(["GET"])
+def list_project(request):
+    search = request.GET.get("search[value]", "")
+    start = int(request.GET.get("start", 0))
+    length = int(request.GET.get("length", 10))
+    draw = int(request.GET.get("draw", 1))
+
+    base_queryset = Project.objects.select_related(
+        "company", "state", "city", "application_type"
+    )
+
+    queryset = base_queryset
+
+    if search:
+        queryset = queryset.filter(
+            Q(name__icontains=search) |
+            Q(code__icontains=search) |
+            Q(company__name__icontains=search)
+        )
+
+    total = base_queryset.count()
+    filtered = queryset.count()
+
+    projects = queryset[start:start+length]
+
+    data = []
+    for i, obj in enumerate(projects, start=1):
+        data.append({
+            "sno": start + i,
+            "company_name": obj.company.name,
+            "project_name": obj.name,
+            "project_code": obj.code,
+            "client_name": obj.client_name,
+            "application_type": obj.application_type.name if obj.application_type else "",
+            "capacity": obj.capacity,
+            "state": obj.state.name if obj.state else "",
+            "city": obj.city.name if obj.city else "",
+            "contact_person": obj.contact_person,
+            "contact_number": obj.contact_number,
+            "status": "Active" if obj.is_active else "Inactive",
+            "id": obj.id
+        })
+
+    return Response({
+        "draw": draw,
+        "recordsTotal": total,
+        "recordsFiltered": filtered,
+        "data": data
+    })
+
+@api_view(["POST"])
+def create_project(request):
+    serializer = ProjectSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response({"status": True, "message": "Project created"})
+    return Response({"status": False, "errors": serializer.errors})
+
+
+@api_view(["POST"])
+def create_project(request):
+    serializer = ProjectSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response({"status": True, "message": "Project created"})
+    return Response({"status": False, "errors": serializer.errors})
+
+@api_view(["PATCH"])
+def toggle_project(request, pk):
+    obj = Project.objects.get(pk=pk)
+    obj.is_active = not obj.is_active
+    obj.save(update_fields=["is_active"])
+    return Response({"status": True})
+
+@api_view(["GET"])
+def get_companies(request):
+    data = Company.objects.filter(is_active=True).values("id", "name")
+    return Response(list(data))
+
+
+@api_view(["GET"])
+def get_application_types(request):
+    data = CommonMaster.objects.filter(type="APPLICATION_TYPE", is_active=True).values("id", "name")
+    return Response(list(data))
+
+
+country_list = extend_schema(
+    parameters=DATATABLE_PARAMETERS,
+    responses=OpenApiTypes.OBJECT,
+)(country_list)
+create_country = extend_schema(
+    request=CountrySerializer,
+    responses=OpenApiTypes.OBJECT,
+)(create_country)
+update_country = extend_schema(
+    request=CountrySerializer,
+    responses=OpenApiTypes.OBJECT,
+)(update_country)
+toggle_country = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_country)
+
+continent_list = extend_schema(
+    responses=ContinentSerializer(many=True),
+)(continent_list)
+create_continent = extend_schema(
+    request=ContinentSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(create_continent)
+update_continent = extend_schema(
+    request=ContinentSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(update_continent)
+toggle_continent = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_continent)
+get_countries = extend_schema(
+    responses=CountrySerializer(many=True),
+)(get_countries)
+
+create_state = extend_schema(
+    request=StateSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(create_state)
+list_states = extend_schema(
+    responses=OpenApiTypes.OBJECT,
+)(list_states)
+toggle_state = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_state)
+
+get_city_types = extend_schema(
+    responses=OpenApiTypes.OBJECT,
+)(get_city_types)
+get_states_by_country = extend_schema(
+    responses=OpenApiTypes.OBJECT,
+)(get_states_by_country)
+create_city = extend_schema(
+    request=CitySerializer,
+    responses=OpenApiTypes.OBJECT,
+)(create_city)
+list_city = extend_schema(
+    parameters=DATATABLE_PARAMETERS,
+    responses=OpenApiTypes.OBJECT,
+)(list_city)
+toggle_city = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_city)
+get_city = extend_schema(
+    responses=CitySerializer,
+)(get_city)
+
+create_tax = extend_schema(
+    request=TaxSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(create_tax)
+list_tax = extend_schema(
+    parameters=DATATABLE_PARAMETERS,
+    operation_id="api_masters_taxes_list",
+    responses=OpenApiTypes.OBJECT,
+)(list_tax)
+toggle_tax = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_tax)
+get_tax = extend_schema(
+    operation_id="api_masters_taxes_detail",
+    responses=TaxSerializer,
+)(get_tax)
+
+list_company = extend_schema(
+    parameters=DATATABLE_PARAMETERS,
+    responses=OpenApiTypes.OBJECT,
+)(list_company)
+create_company = extend_schema(
+    request=CompanySerializer,
+    responses=OpenApiTypes.OBJECT,
+)(create_company)
+toggle_company = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_company)
+
+list_project = extend_schema(
+    parameters=DATATABLE_PARAMETERS,
+    responses=OpenApiTypes.OBJECT,
+)(list_project)
+create_project = extend_schema(
+    request=ProjectSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(create_project)
+toggle_project = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_project)
+get_companies = extend_schema(
+    responses=OpenApiTypes.OBJECT,
+)(get_companies)
+get_application_types = extend_schema(
+    responses=OpenApiTypes.OBJECT,
+)(get_application_types)

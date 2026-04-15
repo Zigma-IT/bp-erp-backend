@@ -22,12 +22,33 @@ from .serializers import (
     ManualAttendanceListSerializer,
     ManualAttendanceCreateUpdateSerializer,
 )
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
 
+@extend_schema_view(
+    login=extend_schema(request=LoginSerializer, responses=OpenApiTypes.OBJECT),
+    me=extend_schema(responses=UserSerializer),
+    logout=extend_schema(responses=OpenApiTypes.OBJECT),
+    change_password=extend_schema(
+        request=ChangePasswordSerializer,
+        responses=OpenApiTypes.OBJECT,
+    ),
+)
 class AuthViewSet(viewsets.ViewSet):
     """
     API endpoint for user authentication
     """
+    serializer_class = LoginSerializer
+
+    def get_serializer_class(self):
+        serializers_map = {
+            "login": LoginSerializer,
+            "change_password": ChangePasswordSerializer,
+            "me": UserSerializer,
+        }
+        return serializers_map.get(self.action, LoginSerializer)
+
 
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def login(self, request):

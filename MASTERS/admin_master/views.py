@@ -1,9 +1,12 @@
 # user_creations - This file defines the API views for the user creations module in the MASTERS app, including functions for listing users with pagination and search functionality, creating new users, updating existing users, and toggling user status. These views handle HTTP requests and return appropriate responses based on the operations performed on the User model.
 from django.shortcuts import render
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.db.models import Q
-from .models import User
+from MASTERS.schema_utils import DATATABLE_PARAMETERS, query_int_parameter
+from .models import UserCreation
 from .serializers import UserSerializer
 
 
@@ -35,7 +38,7 @@ def user_list(request):
     length = int(request.GET.get('length', 10))
     search_value = request.GET.get('search[value]', '')
 
-    queryset = User.objects.select_related('role', 'staff', 'user_type')
+    queryset = UserCreation.objects.select_related('role', 'staff', 'user_type')
 
     total_records = queryset.count()
 
@@ -85,8 +88,8 @@ def create_user(request):
 @api_view(['GET', 'PUT'])
 def update_user(request, pk):
     try:
-        user = User.objects.get(pk=pk)
-    except User.DoesNotExist:
+        user = UserCreation.objects.get(pk=pk)
+    except UserCreation.DoesNotExist:
         return Response({"error": "User not found"}, status=404)
 
     if request.method == "GET":
@@ -104,11 +107,11 @@ def update_user(request, pk):
 @api_view(['PATCH'])
 def toggle_user_status(request, pk):
     try:
-        user = User.objects.get(pk=pk)
+        user = UserCreation.objects.get(pk=pk)
         user.is_active = not user.is_active
         user.save()
         return Response({"status": user.is_active})
-    except User.DoesNotExist:
+    except UserCreation.DoesNotExist:
         return Response({"error": "Not found"}, status=404)
     
 
@@ -238,83 +241,6 @@ from rest_framework.response import Response
 from django.db.models import Q
 from .models import UserType
 from .serializers import UserTypeSerializer
-
-
-@api_view(['GET'])
-def user_type_list(request):
-    draw = int(request.GET.get('draw', 1))
-    start = int(request.GET.get('start', 0))
-    length = int(request.GET.get('length', 10))
-    search = request.GET.get('search[value]', '')
-
-    queryset = UserType.objects.all()
-
-    total = queryset.count()
-
-    if search:
-        queryset = queryset.filter(name__icontains=search)
-
-    filtered = queryset.count()
-
-    queryset = queryset[start:start+length]
-
-    serializer = UserTypeSerializer(queryset, many=True)
-
-    data = []
-    for i, item in enumerate(serializer.data, start=1):
-        data.append({
-            "sno": start + i,
-            "user_type": item["name"],
-            "status": "Active" if item["is_active"] else "Inactive",
-            "id": item["id"]
-        })
-
-    return Response({
-        "draw": draw,
-        "recordsTotal": total,
-        "recordsFiltered": filtered,
-        "data": data
-    })
-
-
-@api_view(['POST'])
-def create_user_type(request):
-    serializer = UserTypeSerializer(data=request.data)
-    
-    if serializer.is_valid():
-        serializer.save()
-        return Response({"message": "Created successfully", "data": serializer.data})
-    
-    return Response(serializer.errors, status=400)
-
-
-@api_view(['PUT'])
-def update_user_type(request, pk):
-    try:
-        obj = UserType.objects.get(pk=pk)
-    except UserType.DoesNotExist:
-        return Response({"error": "Not found"}, status=404)
-
-    serializer = UserTypeSerializer(obj, data=request.data, partial=True)
-    
-    if serializer.is_valid():
-        serializer.save()
-        return Response({"message": "Updated successfully", "data": serializer.data})
-    
-    return Response(serializer.errors, status=400)
-
-
-@api_view(['PATCH'])
-def toggle_user_type(request, pk):
-    try:
-        obj = UserType.objects.get(pk=pk)
-    except UserType.DoesNotExist:
-        return Response({"error": "Not found"}, status=404)
-    
-    obj.is_active = not obj.is_active
-    obj.save()
-
-    return Response({"message": "Status toggled", "status": obj.is_active})
 
 
 @api_view(['GET'])
@@ -505,3 +431,87 @@ def toggle_user_type_permission(request, pk):
     obj.save()
 
     return Response({"message": "Status toggled", "status": obj.status})
+<<<<<<< HEAD
+
+
+user_list = extend_schema(
+    parameters=DATATABLE_PARAMETERS,
+    responses=OpenApiTypes.OBJECT,
+)(user_list)
+create_user = extend_schema(
+    request=UserSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(create_user)
+update_user = extend_schema(
+    request=UserSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(update_user)
+toggle_user_status = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_user_status)
+
+user_screen_list = extend_schema(
+    parameters=DATATABLE_PARAMETERS,
+    responses=OpenApiTypes.OBJECT,
+)(user_screen_list)
+create_user_screen = extend_schema(
+    request=UserScreenSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(create_user_screen)
+update_user_screen = extend_schema(
+    request=UserScreenSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(update_user_screen)
+toggle_status = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_status)
+main_screen_list = extend_schema(
+    responses=OpenApiTypes.OBJECT,
+)(main_screen_list)
+screen_section_list = extend_schema(
+    parameters=[
+        query_int_parameter(
+            "main_screen_id",
+            "Optional main screen ID to filter screen sections.",
+        )
+    ],
+    responses=OpenApiTypes.OBJECT,
+)(screen_section_list)
+
+user_type_list = extend_schema(
+    parameters=DATATABLE_PARAMETERS,
+    responses=OpenApiTypes.OBJECT,
+)(user_type_list)
+create_user_type = extend_schema(
+    request=UserTypeSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(create_user_type)
+update_user_type = extend_schema(
+    request=UserTypeSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(update_user_type)
+toggle_user_type = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_user_type)
+
+user_type_permission_list = extend_schema(
+    parameters=DATATABLE_PARAMETERS,
+    responses=OpenApiTypes.OBJECT,
+)(user_type_permission_list)
+create_user_type_permission = extend_schema(
+    request=UserTypePermissionSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(create_user_type_permission)
+update_user_type_permission = extend_schema(
+    request=UserTypePermissionSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(update_user_type_permission)
+toggle_user_type_permission = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_user_type_permission)
+=======
+>>>>>>> origin/dev

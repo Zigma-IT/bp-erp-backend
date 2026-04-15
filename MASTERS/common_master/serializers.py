@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import City, Continent, Country, State, Tax
+from .models import City, Continent, Country, State, Tax, Company, Project
 
 
 class ContinentSerializer(serializers.ModelSerializer):
@@ -80,3 +80,26 @@ class TaxSerializer(serializers.ModelSerializer):
         if float(data["value"]) < 0:
             raise serializers.ValidationError("Tax cannot be negative")
         return data
+
+
+
+# Company creation
+class CompanySerializer(serializers.ModelSerializer):
+    country_name = serializers.CharField(source="country.name", read_only=True)
+    state_name = serializers.CharField(source="state.name", read_only=True)
+    city_name = serializers.CharField(source="city.name", read_only=True)
+
+    class Meta:
+        model = Company
+        fields = "__all__"
+
+# Project Creation
+class ProjectSerializer(serializers.ModelSerializer):
+    company_name = serializers.CharField(source="company.name", read_only=True)
+    state_name = serializers.CharField(source="state.name", read_only=True)
+    city_name = serializers.CharField(source="city.name", read_only=True)
+    application_type_name = serializers.CharField(source="application_type.name", read_only=True)
+
+    class Meta:
+        model = Project
+        fields = "__all__"

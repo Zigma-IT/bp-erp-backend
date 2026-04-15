@@ -1,6 +1,10 @@
 from rest_framework import serializers
 
+<<<<<<< HEAD
+from .models import MainScreen, UserCreation, UserScreen, UserType, UserTypePermission
+=======
 from .models import MainScreen, Role, Staff, User, UserScreen, UserType, UserTypePermission
+>>>>>>> origin/dev
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -17,7 +21,7 @@ class UserSerializer(serializers.ModelSerializer):
     user_type_name = serializers.CharField(source="user_type.name", read_only=True)
 
     class Meta:
-        model = User
+        model = UserCreation
         fields = "__all__"
 
     def _resolve_related(self, model, value, *, defaults=None, allow_null=False):
