@@ -1,19 +1,30 @@
 # Units - This file defines the API views for managing units in the purchase_master module of the MASTERS app, including a viewset for CRUD operations on UnitMaster model instances and path-based views for listing units with pagination and search functionality, creating new units, updating existing units, and toggling unit status. The UnitViewSet class provides methods for handling create, update, and delete operations, while the path-based views allow for more customized handling of unit-related API requests, including soft deletion by deactivating units instead of permanently removing them from the database.
-from django.shortcuts import render
 from typing import Any, cast
+
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
+from django.db.models import Q
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from django.db.models import Q
+
 from MASTERS.schema_utils import (
     DATATABLE_PARAMETERS,
     SEARCH_PARAMETER,
     query_int_parameter,
 )
-from .models import UnitMaster
-from .serializers import UnitSerializer
+from common_master.models import Company
+from .models import (
+    Category,
+    ItemGroup,
+    ItemMaster,
+    ProductCreation,
+    StandardBOM,
+    StandardBOMItem,
+    SubGroup,
+    UnitMaster,
+)
+from .serializers import CreateBOMSerializer, StandardBOMSerializer, UnitSerializer
 
 class UnitViewSet(viewsets.ModelViewSet):
     queryset = UnitMaster.objects.all().order_by('-id')
@@ -120,15 +131,7 @@ def toggle_unit(request, pk):
 
     return Response({"message": "Status toggled", "status": obj.is_active})
 
-
-
 # Item_groups - This file defines the API views for managing item groups in the purchase_master module of the MASTERS app, including path-based views for listing item groups with pagination and search functionality, creating new item groups, updating existing item groups, and toggling item group status. The views handle HTTP requests and return appropriate responses based on the operations performed on the ItemGroup model, allowing for organized management of item group data within the system.
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from .models import ItemGroup
-
-
 # LIST (with optional search)
 @api_view(['GET'])
 def item_group_list(request):
@@ -237,17 +240,7 @@ def toggle_item_group(request, pk):
         "message": "Status updated successfully",
         "is_active": obj.is_active
     })
-
-
 #Item_sub_groups - This file defines the API views for managing item sub groups in the purchase_master module of the MASTERS app, including path-based views for listing item sub groups with pagination and search functionality, creating new item sub groups, updating existing item sub groups, and toggling item sub group status. The views handle HTTP requests and return appropriate responses based on the operations performed on the SubGroup model, allowing for organized management of item sub group data within the system.
-from django.shortcuts import render
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from .models import SubGroup
-from .models import ItemGroup
-
-
 # LIST
 @api_view(['GET'])
 def sub_group_list(request):
@@ -398,18 +391,7 @@ def sub_group_group_dropdown(request):
         "status": True,
         "data": list(groups)
     })
-
-
 # Item_category's - This file defines the API views for managing item categories in the purchase_master module of the MASTERS app, including path-based views for listing item categories with pagination and search functionality, creating new item categories, updating existing item categories, and toggling item category status. The views handle HTTP requests and return appropriate responses based on the operations performed on the Category model, allowing for organized management of item category data within the system. Additionally, there are views for retrieving dropdown data for groups and sub groups to facilitate category creation and updates.
-from django.shortcuts import render
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from .models import Category
-from .models import ItemGroup
-from .models import SubGroup
-
-
 # LIST
 @api_view(['GET'])
 def category_list(request):
@@ -522,7 +504,7 @@ def update_category(request, pk):
     try:
         group = ItemGroup.objects.get(id=group_id)
         sub_group = SubGroup.objects.get(id=sub_group_id, group=group)
-    except:
+    except (ItemGroup.DoesNotExist, SubGroup.DoesNotExist):
         return Response({"status": False, "message": "Invalid group/sub group"}, status=400)
 
     if Category.objects.exclude(id=pk).filter(category_name=name, sub_group=sub_group).exists():
@@ -586,20 +568,7 @@ def category_sub_group_dropdown(request):
         "status": True,
         "data": list(data)
     })
-
-
-
 # Item_names/code - This file defines the API views for managing item names and codes in the purchase_master module of the MASTERS app, including path-based views for listing items with pagination and search functionality, creating new items, updating existing items, and toggling item status. The views handle HTTP requests and return appropriate responses based on the operations performed on the ItemMaster model, allowing for organized management of item data within the system. Additionally, there are views for retrieving dropdown data for groups, sub groups, and categories to facilitate item creation and updates.
-from django.shortcuts import render
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from .models import ItemMaster
-from .models import ItemGroup
-from .models import SubGroup
-from .models import Category
-from .models import UnitMaster
-
-
 # LIST
 @api_view(['GET'])
 def item_list_legacy(request):
@@ -712,16 +681,6 @@ def generate_item_code(group, sub_group, category):
 
     return f"{prefix}-{str(new_number).zfill(5)}"
 
-
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from .models import ItemMaster
-from .models import ItemGroup
-from .models import SubGroup
-from .models import Category
-from .models import UnitMaster
-
-
 # LIST
 @api_view(['GET'])
 def item_list(request):
@@ -815,19 +774,7 @@ def toggle_item(request, pk):
     obj.save()
 
     return Response({"status": True})
-
-
-
 # Product creations - This file defines the API views for managing product creation in the purchase_master module of the MASTERS app, including path-based views for listing products with pagination and search functionality, creating new products, updating existing products, and toggling product status. The views handle HTTP requests and return appropriate responses based on the operations performed on the ProductCreation model, allowing for organized management of product data within the system. Additionally, there are views for retrieving dropdown data for companies, groups, and sub groups to facilitate product creation and updates.
-from django.shortcuts import render
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from common_master.models import Company
-from .models import ProductCreation
-from .models import ItemGroup
-from .models import SubGroup
-
-
 # LIST
 @api_view(['GET'])
 def product_list(request):
@@ -949,19 +896,7 @@ def sub_group_dropdown(request):
     data = queryset.values('id', 'sub_group_name', 'sub_group_code')
 
     return Response({"status": True, "data": list(data)})
-
-
 # Standard BOM - This file defines the API views for managing standard bills of materials (BOM) in the production module of the MASTERS app, including path-based views for listing BOMs with pagination and search functionality, creating new BOMs with multiple items, viewing BOM details, and updating existing BOMs. The views handle HTTP requests and return appropriate responses based on the operations performed on the StandardBOM and StandardBOMItem models, allowing for organized management of BOM data within the system. Additionally, there are validations in place to ensure data integrity during BOM creation and updates.
-from django.shortcuts import render
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from .models import StandardBOM, StandardBOMItem
-from .serializers import StandardBOMSerializer, CreateBOMSerializer, StandardBOMItemSerializer
-from .models import ProductCreation
-from .models import ItemMaster
-
-
 # LIST ALL BOMS
 @api_view(['GET'])
 def bom_list(request):
@@ -1197,8 +1132,6 @@ def item_dropdown(request):
             "status": False,
             "message": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-<<<<<<< HEAD
-
 
 unit_list = extend_schema(
     parameters=DATATABLE_PARAMETERS,
@@ -1348,5 +1281,3 @@ product_dropdown = extend_schema(
 item_dropdown = extend_schema(
     responses=OpenApiTypes.OBJECT,
 )(item_dropdown)
-=======
->>>>>>> origin/dev

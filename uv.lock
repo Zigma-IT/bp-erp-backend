@@ -32,6 +32,7 @@ dependencies = [
     { name = "mysqlclient" },
     { name = "pillow" },
     { name = "requests" },
+    { name = "rg" },
 ]
 
 [package.metadata]
@@ -43,6 +44,7 @@ requires-dist = [
     { name = "mysqlclient", specifier = ">=2.2.8" },
     { name = "pillow", specifier = ">=12.2.0" },
     { name = "requests", specifier = ">=2.33.1" },
+    { name = "rg", specifier = ">=0.0.76" },
 ]
 
 [[package]]
@@ -343,6 +345,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5f/a4/98b9c7c6428a668bf7e42ebb7c79d576a1c3c1e3ae2d47e674b468388871/requests-2.33.1.tar.gz", hash = "sha256:18817f8c57c6263968bc123d237e3b8b08ac046f5456bd1e307ee8f4250d3517", size = 134120, upload-time = "2026-03-30T16:09:15.531Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d7/8e/7540e8a2036f79a125c1d2ebadf69ed7901608859186c856fa0388ef4197/requests-2.33.1-py3-none-any.whl", hash = "sha256:4e6d1ef462f3626a1f0a0a9c42dd93c63bad33f9f1c1937509b8c5c8718ab56a", size = 64947, upload-time = "2026-03-30T16:09:13.83Z" },
+]
+
+[[package]]
+name = "rg"
+version = "0.0.76"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ba/9b/5e9e9ce3e2290d77a61675c19297ecc017e0c188e25306976830185d3f24/rg-0.0.76.tar.gz", hash = "sha256:ea92d4fdb511f4ec1eb73ac1831e688ade3bb1f38b730bf89798205327d62c68", size = 25808, upload-time = "2026-02-10T19:18:58.157Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9f/c7/33d896d5b35d2a7589071a249adb086f89b9c6725c68c32c4487fae19129/rg-0.0.76-py3-none-any.whl", hash = "sha256:5573c12c700cca72765e93acdcbeeb94167997a45276787b6449dec6b2f101c2", size = 33854, upload-time = "2026-02-10T19:18:56.509Z" },
 ]
 
 [[package]]

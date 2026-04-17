@@ -1,10 +1,31 @@
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+
+from MASTERS.api_router import ExtendedDefaultRouter
+from collections import OrderedDict
 from . import views
 
 # Initialize router for ViewSets
-router = DefaultRouter()
+router = ExtendedDefaultRouter()
 router.register(r'continents-list', views.ContinentViewSet)
+router.extra_api_root_dict = OrderedDict ({
+    "countries": "country-list",
+    "countries-create": "country-create",
+    "continents": "continent-list",
+    "continents-create": "continent-create",
+    "states": "state-list",
+    "states-create": "state-create",
+    "cities": "city-list",
+    "city-types": "city-types",
+    "cities-create": "city-create",
+    "taxes": "tax-list",
+    "taxes-create": "tax-create",
+    "companies": "company-list",
+    "companies-create": "company-create",
+    "projects": "project-list",
+    "projects-create": "project-create",
+    "countries-dropdown": "countries-dropdown",
+})
+
 
 # Country endpoints
 country_patterns = [
@@ -48,18 +69,18 @@ tax_patterns = [
 
 #Company Creation
 company_patterns = [
-    path('company/', views.list_company),
-    path('company/create/', views.create_company),
+    path('company/', views.list_company, name='company-list'),
+    path('company/create/', views.create_company, name='company-create'),
     # path('company/<int:pk>/', views.update_company),
-    path('company/<int:pk>/toggle/', views.toggle_company),
+    path('company/<int:pk>/toggle/', views.toggle_company, name='company-toggle'),
 ]
 
 # Project Creation
 project_patterns = [
-    path('projects/', views.list_project),
-    path('projects/create/', views.create_project),
+    path('projects/', views.list_project, name='project-list'),
+    path('projects/create/', views.create_project, name='project-create'),
     # path('projects/<int:pk>/', views.update_project),
-    path('projects/<int:pk>/toggle/', views.toggle_project),
+    path('projects/<int:pk>/toggle/', views.toggle_project, name='project-toggle'),
 ]
 
 # Dropdown endpoints (placed at end for lower priority)

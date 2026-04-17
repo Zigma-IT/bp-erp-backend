@@ -1,3 +1,5 @@
+"""Serializers for shared geography, tax, company, and project masters."""
+
 from rest_framework import serializers
 
 from .models import City, Continent, Country, State, Tax, Company, Project
@@ -48,12 +50,12 @@ class CitySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["created_at"]
 
-    def validate(self, data):
-        if not data.get("name"):
+    def validate(self, attrs):
+        if not attrs.get("name"):
             raise serializers.ValidationError("City name required")
-        if not data.get("state"):
+        if not attrs.get("state"):
             raise serializers.ValidationError("State required")
-        return data
+        return attrs
 
 
 class TaxSerializer(serializers.ModelSerializer):
@@ -72,14 +74,14 @@ class TaxSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["created_at"]
 
-    def validate(self, data):
-        if not data.get("name"):
+    def validate(self, attrs):
+        if not attrs.get("name"):
             raise serializers.ValidationError("Tax name required")
-        if data.get("value") is None:
+        if attrs.get("value") is None:
             raise serializers.ValidationError("Tax value required")
-        if float(data["value"]) < 0:
+        if float(attrs["value"]) < 0:
             raise serializers.ValidationError("Tax cannot be negative")
-        return data
+        return attrs
 
 
 

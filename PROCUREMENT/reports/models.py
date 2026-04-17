@@ -1,140 +1,129 @@
-# """Reports app does not define standalone database models.
+"""Database models for stored procurement report snapshots.
 
-# This app serves read-only report APIs by querying tables from other apps.
-# """
+Each report API still calculates live data from procurement transactions, then
+stores the generated rows here as the latest snapshot for the same filter set.
+This gives the frontend/API response live values while also keeping report data
+available in the database for checking and auditing.
+"""
+
+import uuid
+from decimal import Decimal
 from django.db import models
 
-# Purchase Requisition Approval Level 1
-LEVEL1_STATUS = (
-    ('pending', 'Pending'),
-    ('approved', 'Approved'),
-    ('rejected', 'Rejected'),
-)
-"""Approvals app does not define standalone database models."""
 
-level1_status = models.CharField(
-    max_length=20,
-    choices=LEVEL1_STATUS,
-    default='pending'
-)
+class ReportSnapshotMixin(models.Model):
+    unique_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    filter_signature = models.CharField(max_length=64, db_index=True)
+    filter_params = models.JSONField(default=dict, blank=True)
+    generated_at = models.DateTimeField(auto_now_add=True)
 
-level1_approved_by = models.ForeignKey(
-    'auth.User',
-    on_delete=models.SET_NULL,
-    null=True,
-    blank=True,
-    related_name='pr_level1_approved'
-)
-
-level1_approved_at = models.DateTimeField(null=True, blank=True)
-level1_remarks = models.TextField(blank=True, null=True)
-
-# Purhcase Requisition level 2
-LEVEL2_STATUS = (
-    ('pending', 'Pending'),
-    ('approved', 'Approved'),
-    ('rejected', 'Rejected'),
-)
-
-level2_status = models.CharField(
-    max_length=20,
-    choices=LEVEL2_STATUS,
-    default='pending'
-)
-
-level2_approved_by = models.ForeignKey(
-    'auth.User',
-    on_delete=models.SET_NULL,
-    null=True,
-    blank=True,
-    related_name='pr_level2_approved'
-)
-
-level2_approved_at = models.DateTimeField(null=True, blank=True)
-level2_remarks = models.TextField(null=True, blank=True)
+    class Meta:
+        abstract = True
+        ordering = ["-generated_at", "id"]
 
 
-# GRN Approval Level 1
-GRN_LEVEL1_STATUS = (
-    ('pending', 'Pending'),
-    ('approved', 'Approved'),
-    ('rejected', 'Rejected'),
-)
-
-level1_status = models.CharField(
-    max_length=20,choices=GRN_LEVEL1_STATUS,default='pending')
-
-level1_approved_by = models.ForeignKey(
-    'auth.User',on_delete=models.SET_NULL,null=True,blank=True,related_name='grn_level1_approved')
-
-level1_approved_at = models.DateTimeField(null=True, blank=True)
-level1_remarks = models.TextField(null=True, blank=True)
-
-# GRN Approval Level 2
-
-GRN_LEVEL2_STATUS = (
-    ('pending', 'Pending'),
-    ('approved', 'Approved'),
-    ('rejected', 'Rejected'),
-)
-
-level2_status = models.CharField(
-    max_length=20,
-    choices=GRN_LEVEL2_STATUS,
-    default='pending'
-)
-
-level2_checked_by = models.ForeignKey(
-    'auth.User',
-    on_delete=models.SET_NULL,
-    null=True,
-    blank=True,
-    related_name='grn_level2_checked'
-)
-
-level2_checked_at = models.DateTimeField(null=True, blank=True)
-level2_remarks = models.TextField(null=True, blank=True)
-
-# SRN Approval Level 1
-SRN_APPROVAL_STATUS = (
-    ('pending', 'Pending'),
-    ('approved', 'Approved'),
-    ('rejected', 'Rejected'),
-)
-
-level1_status = models.CharField(
-    max_length=20,
-    choices=SRN_APPROVAL_STATUS,
-    default='pending'
-)
-
-level1_approved_by = models.ForeignKey(
-    'auth.User',
-    on_delete=models.SET_NULL,
-    null=True,
-    blank=True,
-    related_name='srn_level1_approved'
-)
-
-level1_approved_at = models.DateTimeField(null=True, blank=True)
-level1_remarks = models.TextField(null=True, blank=True)
+class PendingPRReport(ReportSnapshotMixin):
+    company = models.CharField(max_length=255)
+    project = models.CharField(max_length=255)
+    pr_no = models.CharField(max_length=100)
+    date = models.DateField()
+    type = models.CharField(max_length=100)
+    requisition_for = models.CharField(max_length=100)
+    reference_so = models.CharField(max_length=100, blank=True, null=True)
+    item_code = models.CharField(max_length=100, blank=True)
+    item_name = models.CharField(max_length=255)
 
 
-# SRN Approval Level 2
-level2_status = models.CharField(
-    max_length=20,
-    choices=SRN_APPROVAL_STATUS,
-    null=True,
-    blank=True
-)
+class CompletePRReport(ReportSnapshotMixin):
+    unit = models.CharField(max_length=255)
+    project_code = models.CharField(max_length=255)
+    pr_no = models.CharField(max_length=100)
+    pr_date = models.DateField()
+    type = models.CharField(max_length=100)
+    requisition_for = models.CharField(max_length=100)
+    ref_so_no = models.CharField(max_length=100, blank=True, null=True)
+    doc_status = models.CharField(max_length=100)
+    item_status = models.CharField(max_length=100)
+    item_code = models.CharField(max_length=100, blank=True)
+    item_name = models.CharField(max_length=255)
 
-level2_approved_by = models.ForeignKey(
-    'auth.User',
-    on_delete=models.SET_NULL,
-    null=True,
-    blank=True,
-    related_name='srn_level2_approved'
-)
 
-level2_approved_at = models.DateTimeField(null=True, blank=True)
-level2_remarks = models.TextField(null=True, blank=True)
+class POReport(ReportSnapshotMixin):
+    unit = models.CharField(max_length=255)
+    project_code = models.CharField(max_length=255)
+    po_no = models.CharField(max_length=100)
+    po_date = models.DateField()
+    po_type = models.CharField(max_length=100, blank=True, null=True)
+    vendor_code = models.CharField(max_length=100, blank=True)
+    vendor_name = models.CharField(max_length=255)
+    currency = models.CharField(max_length=50, blank=True)
+    exchange_rate = models.DecimalField(max_digits=12, decimal_places=4, default=Decimal("0.00"))
+    basic_value = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    discount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    total_value = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+
+
+class PendingGRNReport(ReportSnapshotMixin):
+    company = models.CharField(max_length=255)
+    project_code = models.CharField(max_length=255)
+    po_no = models.CharField(max_length=100)
+    po_date = models.DateField()
+    po_type = models.CharField(max_length=100, blank=True, null=True)
+    vendor_code = models.CharField(max_length=100, blank=True)
+    vendor_name = models.CharField(max_length=255)
+    item_code = models.CharField(max_length=100, blank=True)
+    item_name = models.CharField(max_length=255)
+    po_qty = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    received_qty = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    pending_qty = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+
+
+class CompleteGRNReport(ReportSnapshotMixin):
+    grn_no = models.CharField(max_length=100)
+    grn_date = models.DateField()
+    company = models.CharField(max_length=255)
+    project = models.CharField(max_length=255)
+    vendor_name = models.CharField(max_length=255)
+    supplier_invoice = models.CharField(max_length=100)
+    invoice_date = models.DateField()
+    challan_no = models.CharField(max_length=100, blank=True, null=True)
+    eway_bill_no = models.CharField(max_length=100, blank=True, null=True)
+    po_no = models.CharField(max_length=100, blank=True, null=True)
+    item_code = models.CharField(max_length=100, blank=True)
+    item_name = models.CharField(max_length=255)
+    po_qty = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    accepted_qty = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    rejected_qty = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    pending_qty = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    uom = models.CharField(max_length=50, blank=True)
+    rate = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    total_value = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+
+
+class PendingSRNReport(ReportSnapshotMixin):
+    company = models.CharField(max_length=255)
+    project_code = models.CharField(max_length=255)
+    po_no = models.CharField(max_length=100)
+    po_date = models.DateField()
+    po_type = models.CharField(max_length=100, blank=True, null=True)
+    vendor_code = models.CharField(max_length=100, blank=True)
+    vendor_name = models.CharField(max_length=255)
+    item_code = models.CharField(max_length=100, blank=True)
+    item_name = models.CharField(max_length=255)
+    po_qty = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    received_qty = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    pending_qty = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+
+
+class CompleteSRNReport(ReportSnapshotMixin):
+    srn_no = models.CharField(max_length=100)
+    srn_date = models.DateField()
+    unit = models.CharField(max_length=255)
+    project = models.CharField(max_length=255)
+    vendor_name = models.CharField(max_length=255)
+    supplier_invoice = models.CharField(max_length=100)
+    invoice_date = models.DateField()
+    challan_no = models.CharField(max_length=100, blank=True, null=True)
+    eway_bill_no = models.CharField(max_length=100, blank=True, null=True)
+    transport_details = models.CharField(max_length=255, blank=True, null=True)
+    po_no = models.CharField(max_length=100, blank=True, null=True)

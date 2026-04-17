@@ -1,3 +1,5 @@
+"""Common master APIs for geography, tax, company, and project lookups."""
+
 from django.db.models import Q
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
@@ -48,7 +50,7 @@ class CountryViewSet(viewsets.ModelViewSet):
         for index, obj in enumerate(queryset, start=1):
             data.append(
                 {
-                    "id": obj.id,
+                    "id": obj.pk,
                     "sno": start + index,
                     "country_name": obj.name,
                     "continent_name": obj.continent.name,
@@ -228,7 +230,7 @@ def list_states(request):
     for index, state_obj in enumerate(states, start=1):
         data.append(
             {
-                "id": state_obj.id,
+                "id": state_obj.pk,
                 "sno": index,
                 "country": state_obj.country.name,
                 "state_name": state_obj.name,
@@ -304,7 +306,7 @@ def list_city(request):
                 "country": city.country.name,
                 "pincode": city.pincode,
                 "status": city.is_active,
-                "id": city.id,
+                "id": city.pk,
             }
         )
 
@@ -383,7 +385,7 @@ def list_tax(request):
                 "tax_value": float(tax.value),
                 "country": tax.country.name if tax.country else "-",
                 "status": tax.is_active,
-                "id": tax.id,
+                "id": tax.pk,
             }
         )
 
@@ -457,7 +459,7 @@ def list_company(request):
             "logo": obj.logo.url if obj.logo else "",
             "document": obj.document.url if obj.document else "",
             "status": "Active" if obj.is_active else "Inactive",
-            "id": obj.id
+            "id": obj.pk
         })
 
     return Response({
@@ -524,7 +526,7 @@ def list_project(request):
             "contact_person": obj.contact_person,
             "contact_number": obj.contact_number,
             "status": "Active" if obj.is_active else "Inactive",
-            "id": obj.id
+            "id": obj.pk
         })
 
     return Response({
@@ -542,14 +544,6 @@ def create_project(request):
         return Response({"status": True, "message": "Project created"})
     return Response({"status": False, "errors": serializer.errors})
 
-
-@api_view(["POST"])
-def create_project(request):
-    serializer = ProjectSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response({"status": True, "message": "Project created"})
-    return Response({"status": False, "errors": serializer.errors})
 
 @api_view(["PATCH"])
 def toggle_project(request, pk):
