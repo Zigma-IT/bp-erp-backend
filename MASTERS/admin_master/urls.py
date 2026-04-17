@@ -1,10 +1,24 @@
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+
+from MASTERS.api_router import ExtendedDefaultRouter
+from collections import OrderedDict
 from . import views
 
 # Initialize router for ViewSets
-router = DefaultRouter()
+router = ExtendedDefaultRouter()
 router.register(r'main-screens', views.MainScreenViewSet)
+router.extra_api_root_dict = OrderedDict ({
+    "users-creation": "user-list",
+    "users-creation-create": "user-create",
+    "user-screens": "user-screen-list",
+    "user-screens-create": "user-screen-create",
+    "user-types": "user-type-list",
+    "user-types-create": "user-type-create",
+    "main-screens-list": "main-screen-list",
+    "screen-sections": "screen-section-list",
+    "user-permissions": "user-permission-list",
+    "user-permissions-create": "user-permission-create",
+})
 
 # User Creation endpoints
 user_patterns = [

@@ -1,3 +1,5 @@
+"""Database models for admin master setup entities."""
+
 import uuid
 from django.contrib.auth.hashers import make_password
 from django.db import models

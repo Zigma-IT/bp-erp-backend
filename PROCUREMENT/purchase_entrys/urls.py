@@ -1,9 +1,16 @@
+"""Purchase entry URL configuration.
+
+The extra API-root entries are kept descriptive so the DRF landing page reads
+like a module index for whoever maintains the procurement APIs next.
+"""
+
 from django.urls import include, path
-from rest_framework.routers import DefaultRouter
+from collections import OrderedDict
+from PROCUREMENT.api_router import ExtendedDefaultRouter
 
 from . import views
 
-router = DefaultRouter()
+router = ExtendedDefaultRouter()
 
 # Rate order
 router.register(r'rate-orders', views.RateOrderViewSet, basename='rate-order')
@@ -13,6 +20,23 @@ router.register(r'grn', views.GRNViewSet, basename='grn')
 
 # SRN
 router.register(r'srn', views.SRNViewSet, basename='srn')
+
+router.extra_api_root_dict = OrderedDict ({
+    "dropdown-companies": "company-dropdown",
+    "dropdown-projects": "project-dropdown",
+    "dropdown-suppliers": "supplier-dropdown",
+    "dropdown-products": "product-dropdown",
+    "dropdown-units": "unit-dropdown",
+    "dropdown-taxes": "tax-dropdown",
+    "purchase-order-types": "purchase-order-types",
+    "purchase-orders": "purchase-order-list",
+    "purchase-orders-create": "purchase-order-create",
+    "purchase-requisitions": "purchase-requisition-approval-list",
+    "purchase-requisitions-create": "purchase-requisition-create",
+    "purchase-order-approval-level1": "purchase-order-approval-level-1-list",
+    "purchase-order-approval-level2": "purchase-order-approval-level-2-list",
+    "purchase-order-approval-level3": "purchase-order-approval-level-3-list",
+})
 
 
 # Dropdown APIs used by the create/edit purchase-order screens.

@@ -1,3 +1,5 @@
+"""Database models for shared common masters used across modules."""
+
 import uuid
 
 from django.db import models

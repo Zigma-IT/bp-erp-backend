@@ -1,3 +1,5 @@
+"""Django app configuration for login/home startup hooks."""
+
 from django.apps import AppConfig
 
 
@@ -6,6 +8,7 @@ class LoginConfig(AppConfig):
     name = 'login_home'
 
     def ready(self):
+        # Development bootstrap ensures a simple admin login exists locally.
         from .bootstrap import ensure_dev_admin_user
 
         ensure_dev_admin_user()

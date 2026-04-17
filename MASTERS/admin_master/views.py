@@ -1,13 +1,26 @@
-# user_creations - This file defines the API views for the user creations module in the MASTERS app, including functions for listing users with pagination and search functionality, creating new users, updating existing users, and toggling user status. These views handle HTTP requests and return appropriate responses based on the operations performed on the User model.
-from django.shortcuts import render
+"""Admin master APIs for users, screens, user types, and permissions.
+
+The file is grouped by frontend screen so a developer can jump directly to the
+matching endpoints for user creation, user screen setup, user type setup, and
+permission mapping.
+"""
+
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
+from django.db.models import Q
+from rest_framework import status, viewsets
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from django.db.models import Q
+
 from MASTERS.schema_utils import DATATABLE_PARAMETERS, query_int_parameter
-from .models import UserCreation
-from .serializers import UserSerializer
+from .models import MainScreen, ScreenSection, UserCreation, UserScreen, UserType, UserTypePermission
+from .serializers import (
+    MainScreenSerializer,
+    UserScreenSerializer,
+    UserSerializer,
+    UserTypePermissionSerializer,
+    UserTypeSerializer,
+)
 
 
 def _user_detail_payload(user):
@@ -20,7 +33,6 @@ def _user_detail_payload(user):
     """
     serialized = UserSerializer(user).data
     return {
-        **serialized,
         "name": user.staff.name if user.staff_id else "",
         "phone": user.mobile or (user.staff.mobile if user.staff_id else ""),
         "work_location": user.project or "",
@@ -115,14 +127,6 @@ def toggle_user_status(request, pk):
         return Response({"error": "Not found"}, status=404)
     
 
-# user_screens - This file defines the API views for managing user screens in the admin module of the MASTERS app, including functions for listing user screens with pagination and search functionality, creating new user screens, updating existing user screens, toggling user screen status, and retrieving main screen and screen section lists. These views handle HTTP requests and return appropriate responses based on the operations performed on the UserScreen model and related entities.
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from django.db.models import Q
-from .models import ScreenSection, UserScreen
-from .serializers import UserScreenSerializer
-
-
 @api_view(['GET'])
 def user_screen_list(request):
     draw = int(request.GET.get('draw', 1))
@@ -210,14 +214,19 @@ def update_user_screen(request, pk):
 
 @api_view(['PATCH'])
 def toggle_status(request, pk):
-    obj = UserScreen.objects.get(pk=pk)
+    try:
+        obj = UserScreen.objects.get(pk=pk)
+    except UserScreen.DoesNotExist:
+        return Response({"error": "Not found"}, status=404)
+
     obj.is_active = not obj.is_active
     obj.save()
 
     return Response({"status": obj.is_active})
+
+
 @api_view(['GET'])
 def main_screen_list(request):
-    from .models import MainScreen
     data = list(MainScreen.objects.values('id', 'name'))
     return Response(data)
 
@@ -233,14 +242,6 @@ def screen_section_list(request):
 
     data = list(queryset.values('id', 'name'))
     return Response(data)
-
-
-# user_types - This file defines the API views for managing user types in the admin module of the MASTERS app, including functions for listing user types with pagination and search functionality, creating new user types, updating existing user types, and toggling user type status. These views handle HTTP requests and return appropriate responses based on the operations performed on the UserType model.
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from django.db.models import Q
-from .models import UserType
-from .serializers import UserTypeSerializer
 
 
 @api_view(['GET'])
@@ -317,16 +318,6 @@ def toggle_user_type(request, pk):
     except UserType.DoesNotExist:
         return Response({"error": "Not found"}, status=404)
     
-
-# user_type_permissions - This file defines the API views for managing user type permissions in the admin module of the MASTERS app, including functions for listing user type permissions with pagination and search functionality, creating new user type permissions, updating existing user type permissions, and toggling user type permission status. These views handle HTTP requests and return appropriate responses based on the operations performed on the UserTypePermission model and related entities.
-from django.shortcuts import render
-from rest_framework import viewsets, status
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from django.db.models import Q
-from .models import UserType, MainScreen, UserTypePermission
-from .serializers import *
-
 
 class UserTypeViewSet(viewsets.ModelViewSet):
     queryset = UserType.objects.all().order_by('id')
@@ -431,7 +422,6 @@ def toggle_user_type_permission(request, pk):
     obj.save()
 
     return Response({"message": "Status toggled", "status": obj.status})
-<<<<<<< HEAD
 
 
 user_list = extend_schema(
@@ -513,5 +503,3 @@ toggle_user_type_permission = extend_schema(
     request=None,
     responses=OpenApiTypes.OBJECT,
 )(toggle_user_type_permission)
-=======
->>>>>>> origin/dev

@@ -1,0 +1,1 @@
+"""Purchase entry app package."""
