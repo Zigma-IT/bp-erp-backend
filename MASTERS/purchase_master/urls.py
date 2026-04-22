@@ -1,5 +1,39 @@
-from django.urls import path
+"""Purchase master URL configuration with a browsable DRF index."""
+
+from django.urls import include, path
+from collections import OrderedDict
+from MASTERS.api_router import ExtendedDefaultRouter
+
 from . import views
+
+
+router = ExtendedDefaultRouter()
+router.extra_api_root_dict = OrderedDict ({
+    "units": "unit-list",
+    "units-create": "unit-create",
+    "item-groups": "item-group-list",
+    "item-groups-create": "item-group-create",
+    "sub-groups": "sub-group-list",
+    "sub-groups-create": "sub-group-create",
+    "sub-groups-group-dropdown": "sub-group-group-dropdown",
+    "categories": "category-list",
+    "categories-create": "category-create",
+    "categories-group-dropdown": "category-group-dropdown",
+    "categories-sub-group-dropdown": "category-sub-group-dropdown",
+    "items": "item-list",
+    "items-create": "item-create",
+    "items-group-dropdown": "item-group-dropdown",
+    "items-sub-group-dropdown": "item-sub-group-dropdown",
+    "products": "product-list",
+    "products-create": "product-create",
+    "products-company-dropdown": "product-company-dropdown",
+    "products-group-dropdown": "product-group-dropdown",
+    "products-sub-group-dropdown": "product-sub-group-dropdown",
+    "boms": "bom-list",
+    "boms-create": "bom-create",
+    "products-dropdown": "product-dropdown",
+    "items-dropdown": "item-dropdown",
+})
 
 # Unit endpoints
 unit_patterns = [
@@ -36,7 +70,7 @@ category_patterns = [
     path('categories/sub-group-dropdown/', views.sub_group_dropdown, name='category-sub-group-dropdown'),
 ]
 
-# Item endpoints
+# Item Names/codes endpoints
 item_patterns = [
     path('items/', views.item_list, name='item-list'),
     path('items/create/', views.create_item, name='item-create'),
@@ -68,12 +102,12 @@ bom_patterns = [
 ]
 
 # Combine all patterns
-urlpatterns = (
-    unit_patterns +
-    item_group_patterns +
-    sub_group_patterns +
-    category_patterns +
-    item_patterns +
-    product_patterns +
-    bom_patterns
-)
+urlpatterns = [path("", include(router.urls))] + [
+    *unit_patterns,
+    *item_group_patterns,
+    *sub_group_patterns,
+    *category_patterns,
+    *item_patterns,
+    *product_patterns,
+    *bom_patterns,
+]

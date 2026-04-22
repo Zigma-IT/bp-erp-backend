@@ -1,5 +1,8 @@
-# Pending PR
+"""Schema serializers for report responses shown in swagger."""
+
 from rest_framework import serializers
+
+
 class PendingPRReportSerializer(serializers.Serializer):
 
     company = serializers.CharField()
@@ -11,7 +14,7 @@ class PendingPRReportSerializer(serializers.Serializer):
     type = serializers.CharField()
     requisition_for = serializers.CharField()
 
-    reference_so = serializers.CharField()
+    reference_so = serializers.CharField(allow_blank=True, allow_null=True)
 
     item_code = serializers.CharField()
     item_name = serializers.CharField()
@@ -28,7 +31,7 @@ class CompletePRReportSerializer(serializers.Serializer):
     type = serializers.CharField()
     requisition_for = serializers.CharField()
 
-    ref_so_no = serializers.CharField()
+    ref_so_no = serializers.CharField(allow_blank=True, allow_null=True)
 
     doc_status = serializers.CharField()
     item_status = serializers.CharField()
@@ -47,7 +50,7 @@ class POReportSerializer(serializers.Serializer):
 
     po_type = serializers.CharField()
 
-    vendor_code = serializers.CharField()
+    vendor_code = serializers.CharField(allow_blank=True)
     vendor_name = serializers.CharField()
 
     currency = serializers.CharField()
@@ -56,6 +59,27 @@ class POReportSerializer(serializers.Serializer):
     basic_value = serializers.FloatField()
     discount = serializers.FloatField()
     total_value = serializers.FloatField()
+
+
+# Pending GRN
+class PendingGRNReportSerializer(serializers.Serializer):
+
+    company = serializers.CharField()
+    project_code = serializers.CharField()
+
+    po_no = serializers.CharField()
+    po_date = serializers.DateField()
+    po_type = serializers.CharField()
+
+    vendor_code = serializers.CharField(allow_blank=True)
+    vendor_name = serializers.CharField()
+
+    item_code = serializers.CharField()
+    item_name = serializers.CharField()
+
+    po_qty = serializers.FloatField()
+    received_qty = serializers.FloatField()
+    pending_qty = serializers.FloatField()
 
 
 # Complete GRN
@@ -72,10 +96,9 @@ class CompleteGRNReportSerializer(serializers.Serializer):
     supplier_invoice = serializers.CharField()
     invoice_date = serializers.DateField()
 
-    challan_no = serializers.CharField()
-    eway_bill_no = serializers.CharField()
-
-    po_no = serializers.CharField()
+    challan_no = serializers.CharField(allow_blank=True, allow_null=True)
+    eway_bill_no = serializers.CharField(allow_blank=True, allow_null=True)
+    po_no = serializers.CharField(allow_blank=True, allow_null=True)
 
     item_code = serializers.CharField()
     item_name = serializers.CharField()
@@ -100,7 +123,7 @@ class PendingSRNReportSerializer(serializers.Serializer):
     po_date = serializers.DateField()
     po_type = serializers.CharField()
 
-    vendor_code = serializers.CharField()
+    vendor_code = serializers.CharField(allow_blank=True)
     vendor_name = serializers.CharField()
 
     item_code = serializers.CharField()
@@ -124,9 +147,7 @@ class CompleteSRNReportSerializer(serializers.Serializer):
     supplier_invoice = serializers.CharField()
     invoice_date = serializers.DateField()
 
-    challan_no = serializers.CharField()
-    eway_bill_no = serializers.CharField()
-
-    transport_details = serializers.CharField()
-
-    po_no = serializers.CharField()
+    challan_no = serializers.CharField(allow_blank=True, allow_null=True)
+    eway_bill_no = serializers.CharField(allow_blank=True, allow_null=True)
+    transport_details = serializers.CharField(allow_blank=True, allow_null=True)
+    po_no = serializers.CharField(allow_blank=True, allow_null=True)

@@ -1,0 +1,1 @@
+"""MASTERS Django project package."""

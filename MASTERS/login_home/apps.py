@@ -1,3 +1,5 @@
+"""Django app configuration for login/home startup hooks."""
+
 from django.apps import AppConfig
 
 

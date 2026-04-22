@@ -1,3 +1,5 @@
+"""API tests for procurement purchase-order workflows."""
+
 from datetime import date
 from decimal import Decimal
 
@@ -13,6 +15,8 @@ from .models import PurchaseOrder, PurchaseOrderApproval, Supplier
 
 class PurchaseOrderApiTests(APITestCase):
     def setUp(self):
+        # Shared master records are created once so each test can focus on the
+        # procurement workflow instead of repeating setup assertions.
         self.company = Company.objects.create(name="Blue Planet", code="BPIVS")
         self.project = Project.objects.create(
             company=self.company,

@@ -1,6 +1,8 @@
+"""Admin registrations for procurement entry masters and transactions."""
+
 from django.contrib import admin
 
-from .models import PurchaseOrder, PurchaseOrderApproval, PurchaseOrderItem, Supplier
+from .models import PurchaseOrder, PurchaseOrderApproval, Supplier
 
 
 @admin.register(Supplier)
@@ -8,11 +10,6 @@ class SupplierAdmin(admin.ModelAdmin):
     list_display = ("name", "contact_person", "contact_no", "is_active")
     search_fields = ("name", "contact_person", "contact_no")
     list_filter = ("is_active",)
-
-
-class PurchaseOrderItemInline(admin.TabularInline):
-    model = PurchaseOrderItem
-    extra = 0
 
 
 class PurchaseOrderApprovalInline(admin.TabularInline):
@@ -33,4 +30,5 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
     )
     search_fields = ("po_number", "supplier__name", "project__name")
     list_filter = ("workflow_status", "entry_date")
-    inlines = [PurchaseOrderItemInline, PurchaseOrderApprovalInline]
+    readonly_fields = ("items_data",)
+    inlines = [PurchaseOrderApprovalInline]

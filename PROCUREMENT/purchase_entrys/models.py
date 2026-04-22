@@ -1,3 +1,5 @@
+"""Database models for procurement entry transactions and approval workflow."""
+
 import uuid
 
 from decimal import Decimal
@@ -7,9 +9,6 @@ from django.utils import timezone
 from common_master.models import Company as CompanyMaster
 from common_master.models import Project as ProjectMaster
 from common_master.models import Tax as TaxMaster
-from purchase_master.models import ItemMaster
-from purchase_master.models import ProductCreation as ProductMaster
-from purchase_master.models import UnitMaster
 
 class UniqueIDMixin(models.Model):
     unique_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
@@ -28,28 +27,16 @@ class RateOrder(UniqueIDMixin):
 
     supplier = models.ForeignKey('Supplier', on_delete=models.CASCADE)
 
+    # Line rows are stored on the header so procurement no longer needs a
+    # separate rate-order line table.
+    items_data = models.JSONField(default=list, blank=True)
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"RateOrder-{self.pk}"
-
-
-class RateOrderItem(UniqueIDMixin):
-
-    rate_order = models.ForeignKey(
-        RateOrder,
-        related_name='items',
-        on_delete=models.CASCADE
-    )
-
-    item_name = models.CharField(max_length=255)
-
-    rate = models.DecimalField(max_digits=10, decimal_places=3)
-
-    from_date = models.DateField()
-    to_date = models.DateField()
 
 
 class Supplier(UniqueIDMixin):
@@ -99,6 +86,10 @@ class PurchaseOrder(UniqueIDMixin):
         on_delete=models.PROTECT,
         related_name="purchase_orders",
     )
+
+    # Purchase-order lines live in JSON on the header so the API still exposes
+    # an `items` array without maintaining a separate item table.
+    items_data = models.JSONField(default=list, blank=True)
 
     po_type = models.CharField(max_length=50, blank=True, null=True)
     pr_number = models.CharField(max_length=100, blank=True, null=True)
@@ -302,66 +293,6 @@ class PurchaseOrder(UniqueIDMixin):
         super().save(*args, **kwargs)
 
 
-class PurchaseOrderItem(UniqueIDMixin):
-    class DiscountType(models.TextChoices):
-        PERCENTAGE = "percentage", "Percentage"
-        AMOUNT = "amount", "Amount"
-
-    purchase_order = models.ForeignKey(
-        PurchaseOrder,
-        related_name="items",
-        on_delete=models.CASCADE,
-    )
-    product = models.ForeignKey(
-        ProductMaster,
-        on_delete=models.PROTECT,
-        related_name="purchase_order_items",
-    )
-    unit = models.ForeignKey(
-        UnitMaster,
-        on_delete=models.PROTECT,
-        related_name="purchase_order_items",
-    )
-    qty = models.DecimalField(max_digits=12, decimal_places=2)
-    rate = models.DecimalField(max_digits=12, decimal_places=2)
-    discount_type = models.CharField(
-        max_length=20,
-        choices=DiscountType.choices,
-        default=DiscountType.PERCENTAGE,
-    )
-    discount_value = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal("0.00"),
-    )
-    tax = models.ForeignKey(
-        TaxMaster,
-        on_delete=models.PROTECT,
-        related_name="purchase_order_items",
-        blank=True,
-        null=True,
-    )
-    tax_percent = models.DecimalField(
-        max_digits=5,
-        decimal_places=2,
-        default=Decimal("0.00"),
-    )
-    amount = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        default=Decimal("0.00"),
-    )
-    delivery_date = models.DateField(blank=True, null=True)
-    remarks = models.TextField(blank=True, null=True)
-
-    class Meta(UniqueIDMixin.Meta):
-        ordering = ["id"]
-
-    def __str__(self):
-        purchase_order_pk = self.purchase_order.pk if self.purchase_order else None
-        return f"{purchase_order_pk} - {self.product}"
-
-
 class PurchaseOrderApproval(UniqueIDMixin):
     class Level(models.IntegerChoices):
         LEVEL_1 = 1, "Level 1"
@@ -422,6 +353,11 @@ class PurchaseRequisition(UniqueIDMixin):
         ('foreclosed', 'Foreclosed'),
         ('po_raised', 'PO Raised'),
     )
+    APPROVAL_STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    )
 
     pr_number = models.CharField(max_length=100, unique=True, blank=True)
 
@@ -432,10 +368,39 @@ class PurchaseRequisition(UniqueIDMixin):
     requisition_type = models.CharField(max_length=100)  # Regular / Service
 
     requisition_date = models.DateField()
+    items_data = models.JSONField(default=list, blank=True)
 
     requested_by = models.CharField(max_length=255)
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    level1_status = models.CharField(
+        max_length=20,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='pending',
+    )
+    level1_approved_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='purchase_requisition_level1_approved',
+    )
+    level1_approved_at = models.DateTimeField(null=True, blank=True)
+    level1_remarks = models.TextField(blank=True, null=True)
+    level2_status = models.CharField(
+        max_length=20,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='pending',
+    )
+    level2_approved_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='purchase_requisition_level2_approved',
+    )
+    level2_approved_at = models.DateTimeField(null=True, blank=True)
+    level2_remarks = models.TextField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -481,27 +446,17 @@ class PurchaseRequisition(UniqueIDMixin):
         super().save(*args, **kwargs)
 
 
-class PurchaseRequisitionItem(UniqueIDMixin):
-
-    purchase_requisition = models.ForeignKey(
-        PurchaseRequisition,
-        related_name='items',
-        on_delete=models.CASCADE
-    )
-
-    product_name = models.CharField(max_length=255)
-    uom = models.CharField(max_length=50)
-
-    qty = models.DecimalField(max_digits=10, decimal_places=2)
-
-    remarks = models.TextField(blank=True, null=True)
-
-
 class GRN(UniqueIDMixin):
 
     STATUS_CHOICES = (
         ('pending', 'Pending'),
         ('checked', 'Checked'),
+        ('rejected', 'Rejected'),
+    )
+    APPROVAL_STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
     )
 
     grn_number = models.CharField(max_length=100, unique=True, blank=True)
@@ -512,6 +467,7 @@ class GRN(UniqueIDMixin):
     po = models.ForeignKey('PurchaseOrder', on_delete=models.CASCADE)
 
     supplier = models.ForeignKey('Supplier', on_delete=models.CASCADE)
+    items_data = models.JSONField(default=list, blank=True)
 
     invoice_date = models.DateField()
     supplier_invoice_no = models.CharField(max_length=100)
@@ -522,6 +478,34 @@ class GRN(UniqueIDMixin):
     dc_no = models.CharField(max_length=100, blank=True, null=True)
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    level1_status = models.CharField(
+        max_length=20,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='pending',
+    )
+    level1_approved_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='grn_level1_approved',
+    )
+    level1_approved_at = models.DateTimeField(null=True, blank=True)
+    level1_remarks = models.TextField(blank=True, null=True)
+    level2_status = models.CharField(
+        max_length=20,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='pending',
+    )
+    level2_checked_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='grn_level2_checked',
+    )
+    level2_checked_at = models.DateTimeField(null=True, blank=True)
+    level2_remarks = models.TextField(blank=True, null=True)
 
     description = models.TextField(blank=True, null=True)
 
@@ -565,34 +549,17 @@ class GRN(UniqueIDMixin):
         super().save(*args, **kwargs)
 
 
-class GRNItem(UniqueIDMixin):
-
-    grn = models.ForeignKey(GRN, related_name='items', on_delete=models.CASCADE)
-
-    product_name = models.CharField(max_length=255)
-    uom = models.CharField(max_length=50)
-
-    order_qty = models.DecimalField(max_digits=10, decimal_places=2)
-    previously_received_qty = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
-
-    received_qty = models.DecimalField(max_digits=10, decimal_places=2)
-
-    rate = models.DecimalField(max_digits=10, decimal_places=2)
-    tax_percent = models.DecimalField(max_digits=5, decimal_places=2)
-
-    discount_type = models.CharField(max_length=50, blank=True, null=True)
-    discount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
-
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
-
-    remarks = models.TextField(blank=True, null=True)
-
-
 class SRN(UniqueIDMixin):
 
     STATUS_CHOICES = (
         ('pending', 'Pending'),
         ('checked', 'Checked'),
+        ('rejected', 'Rejected'),
+    )
+    APPROVAL_STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
     )
 
     srn_number = models.CharField(max_length=100, unique=True, blank=True)
@@ -602,6 +569,7 @@ class SRN(UniqueIDMixin):
 
     po = models.ForeignKey('PurchaseOrder', on_delete=models.CASCADE)
     supplier = models.ForeignKey('Supplier', on_delete=models.CASCADE)
+    items_data = models.JSONField(default=list, blank=True)
 
     # 🔹 Dates
     po_date = models.DateField(null=True, blank=True)
@@ -647,6 +615,34 @@ class SRN(UniqueIDMixin):
 
     # 🔹 Status
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    level1_status = models.CharField(
+        max_length=20,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='pending',
+    )
+    level1_approved_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='srn_level1_approved',
+    )
+    level1_approved_at = models.DateTimeField(null=True, blank=True)
+    level1_remarks = models.TextField(blank=True, null=True)
+    level2_status = models.CharField(
+        max_length=20,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='pending',
+    )
+    level2_approved_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='srn_level2_approved',
+    )
+    level2_approved_at = models.DateTimeField(null=True, blank=True)
+    level2_remarks = models.TextField(blank=True, null=True)
 
     description = models.TextField(blank=True, null=True)
 

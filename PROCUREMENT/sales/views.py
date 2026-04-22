@@ -145,10 +145,7 @@ def sales_order_list(request):
 @api_view(["GET", "PUT", "PATCH", "DELETE"])
 def sales_order_detail(request, pk):
     sales_order = get_object_or_404(
-        SalesOrder.objects.select_related("company", "customer").prefetch_related(
-            "items__product",
-            "items__unit",
-        ),
+        SalesOrder.objects.select_related("company", "customer"),
         pk=pk,
     )
 

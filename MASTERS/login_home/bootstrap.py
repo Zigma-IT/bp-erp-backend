@@ -1,9 +1,13 @@
+"""Bootstrap helper for the default development admin login."""
+
+import os
+
 from django.conf import settings
 from django.contrib.auth.models import User
 
 
 def ensure_dev_admin_user() -> None:
-    if not settings.DEBUG:
+    if not settings.DEBUG or os.environ.get("BP_SKIP_DEV_BOOTSTRAP") == "1":
         return
 
     username = "admin"

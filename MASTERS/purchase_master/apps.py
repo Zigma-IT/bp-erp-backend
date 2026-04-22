@@ -1,3 +1,5 @@
+"""Django app configuration for purchase-master startup hooks."""
+
 from django.apps import AppConfig
 
 

@@ -1,3 +1,5 @@
+"""Procurement entry APIs for purchase orders, requisitions, GRN, and SRN."""
+
 from typing import Any, cast
 
 from django.db.models import F, Q
@@ -14,19 +16,20 @@ from PROCUREMENT.schema_utils import (
     query_int_parameter,
     query_str_parameter,
 )
+from common_master.models import Company as CompanyMaster
+from common_master.models import Project as ProjectMaster
+from common_master.models import Tax as TaxMaster
+from purchase_master.models import ProductCreation as ProductMaster
+from purchase_master.models import UnitMaster
+
 from .models import (
-    CompanyMaster,
     GRN,
-    ProductMaster,
-    ProjectMaster,
     PurchaseOrder,
     PurchaseOrderApproval,
     PurchaseRequisition,
     RateOrder,
     SRN,
     Supplier,
-    TaxMaster,
-    UnitMaster,
 )
 from purchase_master.models import ItemMaster
 from .serializers import (
@@ -481,7 +484,7 @@ def purchase_order_detail(request, pk):
         "freight_tax",
         "other_tax",
         "packing_tax",
-    ).prefetch_related("items__product", "items__unit", "items__tax", "approvals")
+    ).prefetch_related("approvals")
     purchase_order = get_object_or_404(queryset, pk=pk)
     serializer = PurchaseOrderSerializer(purchase_order)
     return Response(serializer.data)
@@ -627,9 +630,7 @@ def create_purchase_requisition(request):
 @api_view(["GET"])
 def purchase_requisition_detail(request, pk):
     purchase_requisition = get_object_or_404(
-        PurchaseRequisition.objects.select_related("company", "project").prefetch_related(
-            "items"
-        ),
+        PurchaseRequisition.objects.select_related("company", "project"),
         pk=pk,
     )
     serializer = PurchaseRequisitionSerializer(purchase_requisition)

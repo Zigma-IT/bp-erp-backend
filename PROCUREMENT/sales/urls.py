@@ -1,6 +1,20 @@
-from django.urls import path
+"""Sales URL configuration with a browsable DRF index."""
+
+from django.urls import include, path
+from collections import OrderedDict
+from PROCUREMENT.api_router import ExtendedDefaultRouter
 
 from . import views
+
+
+router = ExtendedDefaultRouter()
+router.extra_api_root_dict = OrderedDict ({
+    "sales-orders": "sales-order-list",
+    "sales-invoices": "sales-invoice-list",
+    "ordered-bom": "ordered-bom-list",
+    "expense-entry": "expense-entry-list",
+    "expense-approval-action": "expense-approval-action",
+})
 
 # Sales order endpoints
 sales_order_patterns = [

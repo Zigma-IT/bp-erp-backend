@@ -1,3 +1,9 @@
+"""Serializers for admin master setup screens.
+
+These serializers support user creation, screen mapping, user types, and
+permission assignment screens used by the admin module.
+"""
+
 from rest_framework import serializers
 
 from .models import MainScreen, Role, Staff, UserCreation, UserScreen, UserType, UserTypePermission

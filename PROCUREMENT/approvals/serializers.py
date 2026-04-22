@@ -1,3 +1,6 @@
+"""Serializers used by procurement approval screens and swagger responses."""
+
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from purchase_entrys.models import GRN, PurchaseRequisition, SRN
@@ -108,7 +111,8 @@ class PRApprovalLevel2Serializer(serializers.ModelSerializer):
 
     company_name = serializers.CharField(source='company.name', read_only=True)
     project_name = serializers.CharField(source='project.name', read_only=True)
-    requested_by = serializers.CharField(source='created_by.username', read_only=True)
+    req_date = serializers.DateField(source='requisition_date', read_only=True)
+    requested_by = serializers.CharField(read_only=True)
 
     class Meta:
         model = PurchaseRequisition
@@ -132,12 +136,67 @@ class PRApprovalLevel2Serializer(serializers.ModelSerializer):
             'level2_remarks',
         ]
 
+# >>>>>>>>>>>>>>>>>>>> Purchase order approvals level 1 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+# serializers.py
+
+from .models import PurchaseOrder, PurchaseOrderApproval
+
+class PurchaseOrderApprovalListSerializer(serializers.ModelSerializer):
+    company_name = serializers.CharField(source="company.name", read_only=True)
+    project_name = serializers.CharField(source="project.name", read_only=True)
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    net_amount = serializers.DecimalField(
+        source="total_basic_value",
+        max_digits=12,
+        decimal_places=2,
+        read_only=True,
+    )
+    approval_level_1_status = serializers.SerializerMethodField()
+    approval_level_2_status = serializers.SerializerMethodField()
+    approval_level_3_status = serializers.SerializerMethodField()
+    status = serializers.CharField(source="workflow_status", read_only=True)
+
+    def _approval_status(self, obj, level):
+        approval = next(
+            (item for item in getattr(obj, "approvals").all() if item.level == level),
+            None,
+        )
+        return approval.status if approval else PurchaseOrderApproval.Status.PENDING
+
+    def get_approval_level_1_status(self, obj):
+        return self._approval_status(obj, PurchaseOrderApproval.Level.LEVEL_1)
+
+    def get_approval_level_2_status(self, obj):
+        return self._approval_status(obj, PurchaseOrderApproval.Level.LEVEL_2)
+
+    def get_approval_level_3_status(self, obj):
+        return self._approval_status(obj, PurchaseOrderApproval.Level.LEVEL_3)
+
+    class Meta:
+        model = PurchaseOrder
+        fields = [
+            "id",
+            "entry_date",
+            "po_number",
+            "company_name",
+            "project_name",
+            "supplier_name",
+            "net_amount",
+            "gross_amount",
+            "approval_level_1_status",
+            "approval_level_2_status",
+            "approval_level_3_status",
+            "status",
+        ]
+
+
 # GRN Approval Level 1
 class GRNApprovalLevel1Serializer(serializers.ModelSerializer):
 
     company_name = serializers.CharField(source='company.name', read_only=True)
     project_name = serializers.CharField(source='project.name', read_only=True)
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+    po_number = serializers.CharField(source='po.po_number', read_only=True)
 
     class Meta:
         model = GRN
@@ -164,6 +223,7 @@ class GRNApprovalLevel2Serializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source='company.name', read_only=True)
     project_name = serializers.CharField(source='project.name', read_only=True)
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+    po_number = serializers.CharField(source='po.po_number', read_only=True)
     checked_by = serializers.CharField(source='level2_checked_by.username', read_only=True)
 
     class Meta:
@@ -194,6 +254,7 @@ class SRNApprovalLevel1Serializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source='company.name', read_only=True)
     project_name = serializers.CharField(source='project.name', read_only=True)
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+    po_number = serializers.CharField(source='po.po_number', read_only=True)
 
     class Meta:
         model = SRN
@@ -221,6 +282,7 @@ class SRNApprovalLevel2Serializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source='company.name', read_only=True)
     project_name = serializers.CharField(source='project.name', read_only=True)
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+    po_number = serializers.CharField(source='po.po_number', read_only=True)
 
     class Meta:
         model = SRN

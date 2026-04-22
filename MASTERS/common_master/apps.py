@@ -1,3 +1,5 @@
+"""Django app configuration for common-master startup hooks."""
+
 from django.apps import AppConfig
 
 

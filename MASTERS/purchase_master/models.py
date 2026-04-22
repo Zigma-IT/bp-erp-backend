@@ -1,3 +1,5 @@
+"""Database models for purchase master setup screens."""
+
 import uuid
 
 from decimal import Decimal

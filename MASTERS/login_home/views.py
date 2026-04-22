@@ -1,15 +1,18 @@
-# Login and Change Password views for the Admin app, providing API endpoints for user authentication, retrieving user details, logging out, and changing passwords in the MASTERS app.
-# Home page views for managing departments, employees, and manual attendance records in the admin module of the MASTERS app.
-from django.shortcuts import render
-from rest_framework import status, viewsets, serializers
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.authtoken.models import Token
+"""Auth, employee, and attendance APIs for the login/home module."""
+
+from typing import Any, cast
+
 from django.contrib.auth.models import User
-from django.db.models import Q
+from django.db.models import QuerySet
 from django.utils import timezone
-from datetime import timedelta
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import serializers, status, viewsets
+from rest_framework.authtoken.models import Token
+from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.request import Request
+from rest_framework.response import Response
 
 from .models import Department, Employee, ManualAttendance
 from .serializers import (
@@ -22,8 +25,6 @@ from .serializers import (
     ManualAttendanceListSerializer,
     ManualAttendanceCreateUpdateSerializer,
 )
-from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import extend_schema, extend_schema_view
 
 
 @extend_schema_view(
@@ -57,7 +58,9 @@ class AuthViewSet(viewsets.ViewSet):
         """
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
-            user = serializer.validated_data['user']
+            validated_data = serializer.validated_data
+            assert isinstance(validated_data, dict)
+            user = cast(User, validated_data["user"])
             token, created = Token.objects.get_or_create(user=user)
             return Response({
                 'token': token.key,
@@ -92,32 +95,13 @@ class AuthViewSet(viewsets.ViewSet):
             context={'request': request}
         )
         if serializer.is_valid():
+            validated_data = serializer.validated_data
+            assert isinstance(validated_data, dict)
             user = request.user
-            user.set_password(serializer.validated_data['new_password'])
+            user.set_password(cast(str, validated_data["new_password"]))
             user.save()
             return Response({'message': 'Password changed successfully'}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-# Home page views for managing departments, employees, and manual attendance records in the admin module of the MASTERS app.
-from django.shortcuts import render
-from rest_framework import viewsets, status,serializers
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from django.db.models import Q
-from django.utils import timezone
-from datetime import timedelta
-
-from .models import Department, Employee, ManualAttendance
-from .serializers import (
-    DepartmentSerializer,
-    EmployeeListSerializer,
-    EmployeeCreateUpdateSerializer,
-    ManualAttendanceListSerializer,
-    ManualAttendanceCreateUpdateSerializer,
-)
-
 
 class DepartmentViewSet(viewsets.ModelViewSet):
     queryset = Department.objects.all()
@@ -127,9 +111,10 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
 class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.select_related('user', 'department').all()
+    serializer_class = EmployeeListSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> type[serializers.BaseSerializer[Any]]:  # pyright: ignore[reportIncompatibleMethodOverride]
         if self.action in ['create', 'update', 'partial_update']:
             return EmployeeCreateUpdateSerializer
         return EmployeeListSerializer
@@ -146,14 +131,17 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
 
 class ManualAttendanceViewSet(viewsets.ModelViewSet):
+    queryset = ManualAttendance.objects.select_related('employee', 'recorded_by').all()
+    serializer_class = ManualAttendanceListSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        queryset = ManualAttendance.objects.select_related('employee', 'recorded_by').all()
+    def get_queryset(self) -> QuerySet[ManualAttendance]:  # pyright: ignore[reportIncompatibleMethodOverride]
+        request = cast(Request, self.request)
+        queryset = self.queryset.all()
         
         # Filter by date range if provided
-        date_from = self.request.query_params.get('date_from')
-        date_to = self.request.query_params.get('date_to')
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
         
         if date_from:
             queryset = queryset.filter(attendance_date__gte=date_from)
@@ -161,30 +149,25 @@ class ManualAttendanceViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(attendance_date__lte=date_to)
         
         # Filter by employee if provided
-        employee_id = self.request.query_params.get('employee_id')
+        employee_id = request.query_params.get('employee_id')
         if employee_id:
             queryset = queryset.filter(employee_id=employee_id)
         
         # Filter by status if provided
-        status_filter = self.request.query_params.get('status')
+        status_filter = request.query_params.get('status')
         if status_filter:
             queryset = queryset.filter(status=status_filter)
         
         return queryset.order_by('-attendance_date')
 
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> type[serializers.BaseSerializer[Any]]:  # pyright: ignore[reportIncompatibleMethodOverride]
         if self.action in ['create', 'update', 'partial_update']:
             return ManualAttendanceCreateUpdateSerializer
         return ManualAttendanceListSerializer
 
-    def perform_create(self, serializer):
-        # Ensure employee_id exists
-        employee_id = self.request.data.get('employee_id')
-        try:
-            employee = Employee.objects.get(id=employee_id)
-            serializer.save(recorded_by=self.request.user)
-        except Employee.DoesNotExist:
-            raise serializers.ValidationError({'employee_id': 'Employee not found'})
+    def perform_create(self, serializer: ManualAttendanceCreateUpdateSerializer) -> None:
+        request = cast(Request, self.request)
+        serializer.save(recorded_by=request.user)
 
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
