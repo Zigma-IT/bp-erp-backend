@@ -45,6 +45,7 @@ dropdown_patterns = [
     path("dropdown/projects/", views.project_dropdown, name="project-dropdown"),
     path("dropdown/suppliers/", views.supplier_dropdown, name="supplier-dropdown"),
     path("dropdown/products/", views.product_dropdown, name="product-dropdown"),
+    path("dropdown/items/", views.item_dropdown, name="item-dropdown"),
     path("dropdown/units/", views.unit_dropdown, name="unit-dropdown"),
     path("dropdown/taxes/", views.tax_dropdown, name="tax-dropdown"),
     path("dropdown/po-types/", views.purchase_order_types, name="purchase-order-types"),

@@ -65,40 +65,23 @@ router.extra_api_root_dict =  OrderedDict ({
 # Sales order approval endpoints
 sales_order_approval_patterns = [
     path(
-        "sales-order-approval/",
-        views.sales_order_approval_list,
-        name="sales-order-approval-list",
-    ),
+        "sales-order-approval/",views.sales_order_approval_list,name="sales-order-approval-list",),
     path(
-        "sales-order-approval/<int:pk>/",
-        views.sales_order_approval_detail,
-        name="sales-order-approval-detail",
-    ),
+        "sales-order-approval/<int:pk>/",views.sales_order_approval_detail,name="sales-order-approval-detail",),
 ]
 
-po_approval_patterns = [
+# Sales invoice approval endpoints
+sales_invoice_approval_patterns = [
     path(
-        "po-approval/level-1/",
-        views.po_approval_level_1_list,
-        name="po-approval-level-1-list",
-    ),
+        "sales-invoice-approval/",views.sales_invoice_approval_list,name="sales-invoice-approval-list",),
     path(
-        "po-approval/level-2/",
-        views.po_approval_level_2_list,
-        name="po-approval-level-2-list",
-    ),
+        "sales-invoice-approval/<int:pk>/",views.sales_invoice_approval_detail,name="sales-invoice-approval-detail",),
     path(
-        "po-approval/level-3/",
-        views.po_approval_level_3_list,
-        name="po-approval-level-3-list",
-    ),
+        "sales-invoice-approval/create/",views.sales_invoice_create,name="sales-invoice-create",),
     path(
-        "po-approval/<int:pk>/action/",
-        views.po_approval_action,
-        name="po-approval-action",
-    ),
+        "sales-invoice-approval/<int:pk>/update/",views.sales_invoice_update,name="sales-invoice-update",),
 ]
 
 urlpatterns = [
-    path("", include(router.urls)),
-] + sales_order_approval_patterns + po_approval_patterns
+    path('', include(router.urls)),
+] + sales_order_approval_patterns + sales_invoice_approval_patterns

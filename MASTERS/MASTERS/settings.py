@@ -14,7 +14,8 @@ SECRET_KEY = 'django-insecure-rc2yf8g_b69*$u)x3w34=b3)#$qku5uv7f3o2a$l!9od3rj#^y
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['0.0.0.0', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ["0.0.0.0", "localhost", "127.0.0.1"]
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -85,7 +86,7 @@ WSGI_APPLICATION = 'MASTERS.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'BP_ERP',
+        'NAME': 'masters_db',
         'USER': 'root',
         'PASSWORD': 'admin@123',
         'HOST': '127.0.0.1',
@@ -97,6 +98,7 @@ DATABASES = {
         }
     }
 }
+
 
 
 # Password validation

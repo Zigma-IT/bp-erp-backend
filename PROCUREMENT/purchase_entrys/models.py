@@ -684,3 +684,24 @@ class SRN(UniqueIDMixin):
         if not self.srn_number and company and company.pk is not None:
             self.srn_number = self.generate_srn_number()
         super().save(*args, **kwargs)
+    
+class SRNItem(UniqueIDMixin):
+
+    srn = models.ForeignKey(SRN, related_name='items', on_delete=models.CASCADE)
+
+    item = models.ForeignKey(ItemMaster, on_delete=models.CASCADE)
+
+    order_qty = models.DecimalField(max_digits=10, decimal_places=2)
+    previously_received_qty = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    received_qty = models.DecimalField(max_digits=10, decimal_places=2)
+
+    rate = models.DecimalField(max_digits=10, decimal_places=2)
+    tax_percent = models.DecimalField(max_digits=5, decimal_places=2)
+
+    discount_type = models.CharField(max_length=50, blank=True, null=True)
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    remarks = models.TextField(blank=True, null=True)
+    

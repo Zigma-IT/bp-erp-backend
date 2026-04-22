@@ -7,7 +7,8 @@ class CommonMasterConfig(AppConfig):
     name = 'common_master'
 
     def ready(self):
-        # Development bootstrap seeds basic lookup records like continents.
-        from .bootstrap import ensure_dev_common_master_data
-
-        ensure_dev_common_master_data()
+        try:
+            from .bootstrap import ensure_dev_common_master_data
+            ensure_dev_common_master_data()
+        except Exception:
+            return

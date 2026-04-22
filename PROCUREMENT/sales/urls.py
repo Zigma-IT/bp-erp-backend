@@ -22,23 +22,31 @@ sales_order_patterns = [
     path("sales-orders/<int:pk>/", views.sales_order_detail, name="sales-order-detail"),
 ]
 
+# Sales invoice endpoints
 sales_invoice_patterns = [
     path("sales-invoices/", views.sales_invoice_list, name="sales-invoice-list"),
     path("sales-invoices/<int:pk>/", views.sales_invoice_detail, name="sales-invoice-detail"),
 ]
 
-Sales_BOM = [
-    path("ordered-bom/", views.ordered_bom_list, name="ordered-bom-list"),
-    path("ordered-bom/<int:pk>/", views.ordered_bom_detail, name="ordered-bom-detail"),
-
+purchase_expense_patterns = [
+    path("purchase-expenses/", views.purchase_expense_list, name="purchase-expense-list"),
+    path("purchase-expenses/<int:pk>/", views.purchase_expense_detail, name="purchase-expense-detail"),
 ]
 
-Purchase_Expense = [
-    path("expense-entry/", views.expense_entry_list, name="expense-entry-list"),
-    path("expense-entry/<int:pk>/", views.expense_entry_detail, name="expense-entry-detail"),
-    path("expense-entry/approval-action/", views.expense_approval_action, name="expense-approval-action"),
+# Dropdown endpoints
+dropdown_patterns = [
+    path("dropdown/companies/", views.companies_dropdown, name="companies-dropdown"),
+    path("dropdown/customers/", views.customers_dropdown, name="customers-dropdown"),
+    path("dropdown/projects/", views.projects_dropdown, name="projects-dropdown"),
+    path("dropdown/suppliers/", views.suppliers_dropdown, name="suppliers-dropdown"),
+    path("dropdown/categories/", views.categories_dropdown, name="categories-dropdown"),
+    path("dropdown/sub-categories/", views.sub_categories_dropdown, name="sub-categories-dropdown"),
+    path("dropdown/products/", views.products_dropdown, name="products-dropdown"),
+    path("dropdown/units/", views.units_dropdown, name="units-dropdown"),
+    path("dropdown/taxes/", views.taxes_dropdown, name="taxes-dropdown"),
 ]
-# Combine all patterns.
-urlpatterns = [path("", include(router.urls))] + (
-    sales_order_patterns + sales_invoice_patterns + Sales_BOM + Purchase_Expense
-)
+
+# Combine all patterns
+urlpatterns = sales_order_patterns + sales_invoice_patterns + purchase_expense_patterns + dropdown_patterns
+
+

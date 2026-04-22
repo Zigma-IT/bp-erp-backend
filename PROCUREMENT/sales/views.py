@@ -1,14 +1,7 @@
-"""Sales and expense APIs.
-
-The module mixes document CRUD endpoints with summary screens used by the
-frontend approval/report flows. Imports are kept explicit here so the file is
-easier to maintain and doesn't rely on wildcard side effects.
-"""
+from decimal import Decimal
 
 from django.shortcuts import get_object_or_404
-
-from django.db.models import F
-from django.utils import timezone
+from django.db.models import F, Sum
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -19,113 +12,20 @@ from PROCUREMENT.schema_utils import (
     query_int_parameter,
     query_str_parameter,
 )
-from .models import ExpenseApproval, ExpenseEntry, OrderedBOM, SalesInvoice, SalesOrder
+from .models import SalesOrder, SalesInvoice, Customer
 from .serializers import (
-    ExpenseApprovalActionSerializer,
-    ExpenseEntrySerializer,
-    OrderedBOMSerializer,
-    SalesInvoiceSerializer,
+    PurchaseExpenseListRowSerializer,
+    PurchaseExpenseSerializer,
     SalesOrderListRowSerializer,
     SalesOrderSerializer,
+    SalesInvoiceListRowSerializer,
+    SalesInvoiceSerializer,
 )
+from purchase_master.models import ItemGroup, ProductCreation as ProductMaster, SubGroup, UnitMaster
+from common_master.models import Company as CompanyMaster, Project as ProjectMaster, Tax as TaxMaster
+from purchase_entrys.models import Supplier
+from .models import PurchaseExpense
 
-#>>>>>>>>>>>>>>>>>>>>>>>>>>> Sales Invoice >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-SALES_INVOICE_FILTER_PARAMETERS = [
-    query_int_parameter("company", "Filter by company id."),
-    query_int_parameter("customer", "Filter by customer id."),
-    query_date_parameter("from_date", "Filter from invoice date."),
-    query_date_parameter("to_date", "Filter to invoice date."),
-]
-
-
-@extend_schema(
-    operation_id="api_sales_sales_invoice_list",
-    parameters=SALES_INVOICE_FILTER_PARAMETERS,
-    responses={200: {"type": "object"}},
-    methods=["GET"],
-)
-@extend_schema(
-    operation_id="api_sales_sales_invoice_create",
-    request=SalesInvoiceSerializer,
-    responses={201: SalesInvoiceSerializer},
-    methods=["POST"],
-)
-@api_view(["GET", "POST"])
-def sales_invoice_list(request):
-
-    if request.method == "POST":
-        serializer = SalesInvoiceSerializer(data=request.data)
-        if serializer.is_valid():
-            obj = serializer.save()
-            return Response(SalesInvoiceSerializer(obj).data, status=201)
-        return Response(serializer.errors, status=400)
-
-    queryset = SalesInvoice.objects.select_related('company', 'customer', 'project')
-
-    # Filters
-    if request.GET.get("company"):
-        queryset = queryset.filter(company_id=request.GET["company"])
-
-    if request.GET.get("customer"):
-        queryset = queryset.filter(customer_id=request.GET["customer"])
-
-    if request.GET.get("from_date") and request.GET.get("to_date"):
-        queryset = queryset.filter(entry_date__range=[
-            request.GET["from_date"], request.GET["to_date"]
-        ])
-
-    data = []
-    for i, row in enumerate(queryset, 1):
-        data.append({
-            "id": row.pk,
-            "sno": i,
-            "invoice_no": row.invoice_number,
-            "company": row.company.name,
-            "project": row.project.name if row.project else "",
-            "customer": row.customer.name,
-            "invoice_date": row.entry_date,
-            "due_date": row.due_date,
-            "amount": row.total_amount,
-            "remarks": row.remarks,
-        })
-
-    return Response({"data": data})
-
-@extend_schema(
-    operation_id="api_sales_sales_invoice_detail",
-    responses=SalesInvoiceSerializer,
-    methods=["GET"],
-)
-@extend_schema(
-    operation_id="api_sales_sales_invoice_update",
-    request=SalesInvoiceSerializer,
-    responses=SalesInvoiceSerializer,
-    methods=["PUT"],
-)
-@extend_schema(
-    operation_id="api_sales_sales_invoice_delete",
-    responses={204: None},
-    methods=["DELETE"],
-)
-@api_view(["GET", "PUT", "DELETE"])
-def sales_invoice_detail(request, pk):
-    obj = get_object_or_404(SalesInvoice, pk=pk)
-
-    if request.method == "GET":
-        return Response(SalesInvoiceSerializer(obj).data)
-
-    if request.method == "DELETE":
-        obj.delete()
-        return Response(status=204)
-
-    serializer = SalesInvoiceSerializer(obj, data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data)
-
-    return Response(serializer.errors, status=400)
-
-#>>>>>>>>>>>>>>>>>>>>>>>>>>>> Sales Order >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 SALES_ORDER_FILTER_PARAMETERS = [
     query_int_parameter("company", "Filter by company id."),
@@ -268,227 +168,412 @@ def sales_order_detail(request, pk):
         return Response(response_serializer.data)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-#>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Sales BOM >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-@extend_schema(
-    operation_id="api_sales_ordered_bom_list",
-    responses={200: {"type": "object"}},
-    methods=["GET"],
+
+# Sales Invoice endpoints
+SALES_INVOICE_FILTER_PARAMETERS = [
+    query_int_parameter("company", "Filter by company id."),
+    query_int_parameter("customer", "Filter by customer id."),
+    query_str_parameter("status", "Filter by status."),
+    query_date_parameter("from_date", "Filter from invoice date."),
+    query_date_parameter("to_date", "Filter to invoice date."),
+]
+
+SALES_INVOICE_LIST_RESPONSE = inline_serializer(
+    name="SalesInvoiceListResponse",
+    fields={"data": SalesInvoiceListRowSerializer(many=True)},
 )
-@extend_schema(
-    operation_id="api_sales_ordered_bom_create",
-    request=OrderedBOMSerializer,
-    responses={201: OrderedBOMSerializer},
-    methods=["POST"],
+
+PURCHASE_EXPENSE_FILTER_PARAMETERS = [
+    query_int_parameter("company", "Filter by company id."),
+    query_int_parameter("project", "Filter by project id."),
+    query_int_parameter("category", "Filter by category id."),
+    query_int_parameter("sub_category", "Filter by sub category id."),
+    query_int_parameter("supplier", "Filter by supplier id."),
+    query_str_parameter("status", "Filter by status."),
+    query_date_parameter("from_date", "Filter from expense date."),
+    query_date_parameter("to_date", "Filter to expense date."),
+]
+
+PURCHASE_EXPENSE_LIST_RESPONSE = inline_serializer(
+    name="PurchaseExpenseListResponse",
+    fields={"data": PurchaseExpenseListRowSerializer(many=True)},
 )
-@api_view(["GET", "POST"])
-def ordered_bom_list(request):
 
-    if request.method == "POST":
-        serializer = OrderedBOMSerializer(data=request.data)
-        if serializer.is_valid():
-            obj = serializer.save()
-            return Response(OrderedBOMSerializer(obj).data, status=201)
-        return Response(serializer.errors, status=400)
 
-    queryset = OrderedBOM.objects.select_related('company', 'sales_order')
-
-    if request.GET.get("company"):
-        queryset = queryset.filter(company_id=request.GET["company"])
-
-    if request.GET.get("sales_order"):
-        queryset = queryset.filter(sales_order_id=request.GET["sales_order"])
-
-    if request.GET.get("type"):
-        queryset = queryset.filter(material_type=request.GET["type"])
-
-    data = []
-    for i, row in enumerate(queryset, 1):
-        data.append({
-            "id": row.pk,
-            "sno": i,
-            "sales_order": row.sales_order.so_number,
-            "so_type": row.so_type,
-            "bom_type": getattr(row, "get_material_type_display")(),
-        })
-
-    return Response({"data": data})
-
-@extend_schema(
-    operation_id="api_sales_ordered_bom_detail",
-    responses=OrderedBOMSerializer,
-    methods=["GET"],
-)
-@extend_schema(
-    operation_id="api_sales_ordered_bom_update",
-    request=OrderedBOMSerializer,
-    responses=OrderedBOMSerializer,
-    methods=["PUT"],
-)
-@extend_schema(
-    operation_id="api_sales_ordered_bom_delete",
-    responses={204: None},
-    methods=["DELETE"],
-)
-@api_view(["GET", "PUT", "DELETE"])
-def ordered_bom_detail(request, pk):
-    obj = get_object_or_404(OrderedBOM, pk=pk)
-
-    if request.method == "GET":
-        return Response(OrderedBOMSerializer(obj).data)
-
-    if request.method == "DELETE":
-        obj.delete()
-        return Response(status=204)
-
-    serializer = OrderedBOMSerializer(obj, data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data)
-
-    return Response(serializer.errors, status=400)
-
-# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Purchase Expense >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-@extend_schema(
-    operation_id="api_sales_expense_entry_list",
-    responses={200: {"type": "object"}},
-    methods=["GET"],
-)
-@extend_schema(
-    operation_id="api_sales_expense_entry_create",
-    request=ExpenseEntrySerializer,
-    responses={201: ExpenseEntrySerializer},
-    methods=["POST"],
-)
-@api_view(["GET", "POST"])
-def expense_entry_list(request):
-
-    if request.method == "POST":
-        serializer = ExpenseEntrySerializer(data=request.data)
-        if serializer.is_valid():
-            obj = serializer.save()
-            return Response(ExpenseEntrySerializer(obj).data, status=201)
-        return Response(serializer.errors, status=400)
-
-    queryset = ExpenseEntry.objects.select_related(
-        'company', 'project', 'supplier'
+def _sales_invoice_queryset(request):
+    queryset = SalesInvoice.objects.select_related("company", "customer").order_by(
+        "-invoice_date",
+        "-id",
     )
 
-    if request.GET.get("company"):
-        queryset = queryset.filter(company_id=request.GET["company"])
+    company = request.GET.get("company")
+    customer = request.GET.get("customer")
+    status_filter = request.GET.get("status")
+    from_date = request.GET.get("from_date")
+    to_date = request.GET.get("to_date")
 
-    if request.GET.get("project"):
-        queryset = queryset.filter(project_id=request.GET["project"])
+    if company:
+        queryset = queryset.filter(company_id=company)
 
-    if request.GET.get("supplier"):
-        queryset = queryset.filter(supplier_id=request.GET["supplier"])
+    if customer:
+        queryset = queryset.filter(customer_id=customer)
 
-    if request.GET.get("status"):
-        queryset = queryset.filter(status=request.GET["status"])
+    if status_filter:
+        queryset = queryset.filter(status=status_filter)
 
-    if request.GET.get("from_date") and request.GET.get("to_date"):
-        queryset = queryset.filter(expense_date__range=[
-            request.GET["from_date"], request.GET["to_date"]
-        ])
+    if from_date and to_date:
+        queryset = queryset.filter(invoice_date__range=[from_date, to_date])
 
-    data = []
-    for i, row in enumerate(queryset, 1):
-        data.append({
-            "id": row.pk,
-            "sno": i,
-            "expense_no": row.expense_number,
-            "company": row.company.name,
-            "project": row.project.name,
-            # "category": row.category.name,
-            # "sub_category": row.sub_category.name,
-            "payment_type": row.payment_type,
-            "supplier": row.supplier.name if row.supplier else row.manual_supplier_name,
-            "expense_date": row.expense_date,
-            "total_amount": row.total_amount,
-            "approval_status": row.status,
-        })
+    return queryset
 
-    return Response({"data": data})
+
+def _purchase_expense_queryset(request):
+    queryset = PurchaseExpense.objects.select_related(
+        "company",
+        "project",
+        "supplier",
+        "category",
+        "sub_category",
+    ).order_by("-expense_date", "-id")
+
+    company = request.GET.get("company")
+    project = request.GET.get("project")
+    category = request.GET.get("category")
+    sub_category = request.GET.get("sub_category")
+    supplier = request.GET.get("supplier")
+    status_filter = request.GET.get("status")
+    from_date = request.GET.get("from_date")
+    to_date = request.GET.get("to_date")
+
+    if company:
+        queryset = queryset.filter(company_id=company)
+    if project:
+        queryset = queryset.filter(project_id=project)
+    if category:
+        queryset = queryset.filter(category_id=category)
+    if sub_category:
+        queryset = queryset.filter(sub_category_id=sub_category)
+    if supplier:
+        queryset = queryset.filter(supplier_id=supplier)
+    if status_filter:
+        queryset = queryset.filter(status=status_filter)
+    if from_date and to_date:
+        queryset = queryset.filter(expense_date__range=[from_date, to_date])
+
+    return queryset
+
 
 @extend_schema(
-    operation_id="api_sales_expense_entry_detail",
-    responses=ExpenseEntrySerializer,
+    operation_id="api_sales_sales_invoice_list",
+    parameters=SALES_INVOICE_FILTER_PARAMETERS,
+    responses=SALES_INVOICE_LIST_RESPONSE,
     methods=["GET"],
 )
 @extend_schema(
-    operation_id="api_sales_expense_entry_update",
-    request=ExpenseEntrySerializer,
-    responses=ExpenseEntrySerializer,
+    operation_id="api_sales_sales_invoice_create",
+    request=SalesInvoiceSerializer,
+    responses={201: SalesInvoiceSerializer},
+    methods=["POST"],
+)
+@api_view(["GET", "POST"])
+def sales_invoice_list(request):
+    if request.method == "POST":
+        serializer = SalesInvoiceSerializer(data=request.data)
+        if serializer.is_valid():
+            sales_invoice = serializer.save()
+            response_serializer = SalesInvoiceSerializer(sales_invoice)
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    data = _sales_invoice_queryset(request).values(
+        "id",
+        "invoice_date",
+        "invoice_number",
+        "status",
+        company_name=F("company__name"),
+        customer_name=F("customer__name"),
+    )
+
+    result = []
+    for i, row in enumerate(data, 1):
+        # Calculate total amount for this invoice
+        amount = (
+            SalesInvoice.objects.get(pk=row["id"])
+            .items.aggregate(total=Sum("amount"))["total"]
+            or Decimal(0)
+        )
+        result.append(
+            {
+                "id": row["id"],
+                "sno": i,
+                "invoice_date": row["invoice_date"],
+                "invoice_number": row["invoice_number"],
+                "company_name": row["company_name"],
+                "customer_name": row["customer_name"],
+                "amount": str(amount),
+                "approve_status": row["status"],
+            }
+        )
+
+    return Response({"data": result})
+
+
+@extend_schema(
+    operation_id="api_sales_sales_invoice_detail",
+    responses=SalesInvoiceSerializer,
+    methods=["GET"],
+)
+@extend_schema(
+    operation_id="api_sales_sales_invoice_update",
+    request=SalesInvoiceSerializer,
+    responses=SalesInvoiceSerializer,
     methods=["PUT"],
 )
 @extend_schema(
-    operation_id="api_sales_expense_entry_delete",
+    operation_id="api_sales_sales_invoice_partial_update",
+    request=SalesInvoiceSerializer,
+    responses=SalesInvoiceSerializer,
+    methods=["PATCH"],
+)
+@extend_schema(
+    operation_id="api_sales_sales_invoice_delete",
     responses={204: None},
     methods=["DELETE"],
 )
-@api_view(["GET", "PUT", "DELETE"])
-def expense_entry_detail(request, pk):
-    obj = get_object_or_404(ExpenseEntry, pk=pk)
+@api_view(["GET", "PUT", "PATCH", "DELETE"])
+def sales_invoice_detail(request, pk):
+    sales_invoice = get_object_or_404(
+        SalesInvoice.objects.select_related("company", "customer").prefetch_related(
+            "items__product",
+            "items__unit",
+        ),
+        pk=pk,
+    )
 
     if request.method == "GET":
-        return Response(ExpenseEntrySerializer(obj).data)
-
-    if request.method == "DELETE":
-        obj.delete()
-        return Response(status=204)
-
-    serializer = ExpenseEntrySerializer(obj, data=request.data)
-    if serializer.is_valid():
-        serializer.save()
+        serializer = SalesInvoiceSerializer(sales_invoice)
         return Response(serializer.data)
 
-    return Response(serializer.errors, status=400)
+    if request.method == "DELETE":
+        sales_invoice.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
-# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Purchase Expense Approval <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    serializer = SalesInvoiceSerializer(
+        sales_invoice,
+        data=request.data,
+        partial=request.method == "PATCH",
+    )
+    if serializer.is_valid():
+        updated_sales_invoice = serializer.save()
+        response_serializer = SalesInvoiceSerializer(updated_sales_invoice)
+        return Response(response_serializer.data)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 @extend_schema(
-    operation_id="api_sales_expense_approval_action",
-    request=ExpenseApprovalActionSerializer,
-    responses={200: {"type": "object"}},
+    operation_id="api_sales_purchase_expense_list",
+    parameters=PURCHASE_EXPENSE_FILTER_PARAMETERS,
+    responses=PURCHASE_EXPENSE_LIST_RESPONSE,
+    methods=["GET"],
 )
-@api_view(["POST"])
-def expense_approval_action(request):
-    serializer = ExpenseApprovalActionSerializer(data=request.data)
+@extend_schema(
+    operation_id="api_sales_purchase_expense_create",
+    request=PurchaseExpenseSerializer,
+    responses={201: PurchaseExpenseSerializer},
+    methods=["POST"],
+)
+@api_view(["GET", "POST"])
+def purchase_expense_list(request):
+    if request.method == "POST":
+        serializer = PurchaseExpenseSerializer(data=request.data)
+        if serializer.is_valid():
+            purchase_expense = serializer.save()
+            response_serializer = PurchaseExpenseSerializer(purchase_expense)
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=400)
+    data = _purchase_expense_queryset(request).values(
+        "id",
+        "expense_date",
+        "expense_number",
+        "payment_type",
+        "status",
+        "supplier_manual_entry",
+        "manual_supplier_name",
+        company_name=F("company__name"),
+        project_name=F("project__name"),
+        category_name=F("category__group_name"),
+        sub_category_name=F("sub_category__sub_group_name"),
+        supplier_name=F("supplier__name"),
+    )
 
-    validated_data = serializer.validated_data
-    assert isinstance(validated_data, dict)
+    result = []
+    for i, row in enumerate(data, 1):
+        total_amount = (
+            PurchaseExpense.objects.get(pk=row["id"])
+            .items.aggregate(total=Sum("amount"))["total"]
+            or Decimal(0)
+        )
+        result.append(
+            {
+                "id": row["id"],
+                "sno": i,
+                "expense_date": row["expense_date"],
+                "expense_number": row["expense_number"],
+                "company_name": row["company_name"],
+                "project_name": row["project_name"] or "",
+                "category_name": row["category_name"] or "",
+                "sub_category_name": row["sub_category_name"] or "",
+                "payment_type": row["payment_type"],
+                "supplier_name": row["manual_supplier_name"]
+                if row["supplier_manual_entry"] and row["manual_supplier_name"]
+                else (row["supplier_name"] or ""),
+                "total_amount": str(total_amount),
+                "approval_status": row["status"],
+            }
+        )
 
-    expense = get_object_or_404(ExpenseEntry, pk=validated_data["expense_id"])
+    return Response({"data": result})
 
-    current_level = ExpenseApproval.objects.filter(
-        expense=expense,
-        status='pending',
-    ).order_by('level').first()
 
-    if not current_level:
-        return Response({"error": "No pending approval"}, status=400)
+@extend_schema(
+    operation_id="api_sales_purchase_expense_detail",
+    responses=PurchaseExpenseSerializer,
+    methods=["GET"],
+)
+@extend_schema(
+    operation_id="api_sales_purchase_expense_update",
+    request=PurchaseExpenseSerializer,
+    responses=PurchaseExpenseSerializer,
+    methods=["PUT"],
+)
+@extend_schema(
+    operation_id="api_sales_purchase_expense_partial_update",
+    request=PurchaseExpenseSerializer,
+    responses=PurchaseExpenseSerializer,
+    methods=["PATCH"],
+)
+@extend_schema(
+    operation_id="api_sales_purchase_expense_delete",
+    responses={204: None},
+    methods=["DELETE"],
+)
+@api_view(["GET", "PUT", "PATCH", "DELETE"])
+def purchase_expense_detail(request, pk):
+    purchase_expense = get_object_or_404(
+        PurchaseExpense.objects.select_related(
+            "company",
+            "project",
+            "supplier",
+            "category",
+            "sub_category",
+        ).prefetch_related("items__product", "items__unit"),
+        pk=pk,
+    )
 
-    action = validated_data["action"]
+    if request.method == "GET":
+        serializer = PurchaseExpenseSerializer(purchase_expense)
+        return Response(serializer.data)
 
-    current_level.status = 'approved' if action == 'approve' else 'rejected'
-    current_level.approved_by = request.user
-    current_level.remarks = validated_data.get('remarks')
-    current_level.action_date = timezone.now()
-    current_level.save()
+    if request.method == "DELETE":
+        purchase_expense.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
-    if action == 'reject':
-        expense.status = 'rejected'
-        expense.save()
-        return Response({"message": "Expense rejected"})
+    serializer = PurchaseExpenseSerializer(
+        purchase_expense,
+        data=request.data,
+        partial=request.method == "PATCH",
+    )
+    if serializer.is_valid():
+        updated_purchase_expense = serializer.save()
+        response_serializer = PurchaseExpenseSerializer(updated_purchase_expense)
+        return Response(response_serializer.data)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    # Check next level
-    next_level = ExpenseApproval.objects.filter(expense=expense, status='pending').exists()
 
-    if not next_level:
-        expense.status = 'approved'
-        expense.save()
-        return Response({"message": "Fully approved"})
+# Dropdown endpoints
+@api_view(["GET"])
+def companies_dropdown(request):
+    """Dropdown list of companies"""
+    companies = CompanyMaster.objects.all().values_list("id", "name").order_by("name")
+    results = [{"id": company[0], "name": company[1]} for company in companies]
+    return Response({"results": results})
 
-    return Response({"message": "Approved. Next level pending"})
+
+@api_view(["GET"])
+def customers_dropdown(request):
+    """Dropdown list of customers"""
+    customers = Customer.objects.all().values_list("id", "name").order_by("name")
+    results = [{"id": customer[0], "name": customer[1]} for customer in customers]
+    return Response({"results": results})
+
+
+@api_view(["GET"])
+def projects_dropdown(request):
+    company_id = request.GET.get("company")
+    queryset = ProjectMaster.objects.filter(is_active=True)
+    if company_id:
+        queryset = queryset.filter(company_id=company_id)
+    results = [
+        {"id": project.id, "name": project.name}
+        for project in queryset.order_by("name")
+    ]
+    return Response({"results": results})
+
+
+@api_view(["GET"])
+def suppliers_dropdown(request):
+    queryset = Supplier.objects.filter(is_active=True).order_by("name")
+    results = [{"id": supplier.id, "name": supplier.name} for supplier in queryset]
+    return Response({"results": results})
+
+
+@api_view(["GET"])
+def categories_dropdown(request):
+    queryset = ItemGroup.objects.filter(is_active=True).order_by("group_name")
+    results = [{"id": category.id, "name": category.group_name} for category in queryset]
+    return Response({"results": results})
+
+
+@api_view(["GET"])
+def sub_categories_dropdown(request):
+    category_id = request.GET.get("category")
+    queryset = SubGroup.objects.filter(is_active=True).order_by("sub_group_name")
+    if category_id:
+        queryset = queryset.filter(group_id=category_id)
+    results = [{"id": sub_category.id, "name": sub_category.sub_group_name} for sub_category in queryset]
+    return Response({"results": results})
+
+
+@api_view(["GET"])
+def products_dropdown(request):
+    """Dropdown list of products"""
+    company_id = request.GET.get("company")
+    queryset = ProductMaster.objects.all()
+    
+    if company_id:
+        queryset = queryset.filter(company_id=company_id)
+    
+    results = [
+        {"id": p.id, "name": p.product_name, "value": 0}
+        for p in queryset.order_by("product_name")
+    ]
+    return Response({"results": results})
+
+
+@api_view(["GET"])
+def units_dropdown(request):
+    """Dropdown list of units"""
+    units = UnitMaster.objects.all().values_list("id", "unit_name")
+    results = [{"id": u[0], "name": u[1], "value": 0} for u in units]
+    return Response({"results": results})
+
+
+@api_view(["GET"])
+def taxes_dropdown(request):
+    queryset = TaxMaster.objects.filter(is_active=True).order_by("name")
+    results = [
+        {"id": tax.id, "name": tax.name, "value": str(tax.value)}
+        for tax in queryset
+    ]
+    return Response({"results": results})

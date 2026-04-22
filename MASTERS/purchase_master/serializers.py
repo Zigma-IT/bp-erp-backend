@@ -24,7 +24,6 @@ class ItemGroupSerializer(serializers.ModelSerializer):
         return attrs
 
 
-
 # Standard BOM - This file defines the serializers for the StandardBOM and StandardBOMItem models in the purchase_master module of the MASTERS app, which are responsible for converting model instances to and from JSON format for API interactions. The StandardBOMItemSerializer class includes additional fields to represent the related item's name and code for better readability in API responses, while the StandardBOMSerializer includes a nested representation of its related items and the product name. The CreateBOMSerializer class is a custom serializer that validates the input data for creating a new BOM, ensuring that the product ID exists and that each item in the list has the required fields and valid references to existing items in the database.
 class StandardBOMItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.item_name', read_only=True)
@@ -78,7 +77,5 @@ class CreateBOMSerializer(serializers.Serializer):
                 raise serializers.ValidationError(f"Item {idx}: Item with ID {item['item_id']} not found")
         
         return value
-
-
 
 

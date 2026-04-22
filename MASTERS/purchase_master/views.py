@@ -1133,6 +1133,7 @@ def item_dropdown(request):
             "message": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
 unit_list = extend_schema(
     parameters=DATATABLE_PARAMETERS,
     responses=OpenApiTypes.OBJECT,

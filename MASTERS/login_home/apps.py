@@ -8,7 +8,8 @@ class LoginConfig(AppConfig):
     name = 'login_home'
 
     def ready(self):
-        # Development bootstrap ensures a simple admin login exists locally.
-        from .bootstrap import ensure_dev_admin_user
-
-        ensure_dev_admin_user()
+        try:
+            from .bootstrap import ensure_dev_admin_user
+            ensure_dev_admin_user()
+        except Exception:
+            return

@@ -4,7 +4,65 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from purchase_entrys.models import GRN, PurchaseRequisition, SRN
-from sales.models import SalesOrder
+from sales.models import SalesOrder, SalesOrderItem, SalesInvoice, SalesInvoiceItem
+
+# Sales order approvals
+class SalesOrderApprovalItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.product_name", read_only=True)
+    uom = serializers.CharField(source="unit.unit_name", read_only=True)
+
+    class Meta:
+        model = SalesOrderItem
+        fields = [
+            "id",
+            "product_name",
+            "uom",
+            "qty",
+            "rate",
+            "tax_percent",
+            "amount",
+            "sub_task",
+        ]
+
+
+class SalesOrderApprovalDetailSerializer(serializers.ModelSerializer):
+    company_name = serializers.CharField(source="company.name", read_only=True)
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
+    items = SalesOrderApprovalItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SalesOrder
+        fields = [
+            "id",
+            "entry_date",
+            "so_number",
+            "so_type",
+            "currency",
+            "exchange_rate",
+            "contact_person",
+            "customer_po_number",
+            "customer_po_date",
+            "active_status",
+            "status",
+            "company",
+            "company_name",
+            "customer",
+            "customer_name",
+            "created_at",
+            "items",
+        ]
+
+
+class SalesOrderApprovalListRowSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    sno = serializers.IntegerField()
+    entry_date = serializers.DateField()
+    sales_order_no = serializers.CharField()
+    company_name = serializers.CharField()
+    customer_name = serializers.CharField()
+    so_type = serializers.CharField()
+    active_status = serializers.CharField()
+    approve_status = serializers.CharField()
 
 
 # Purchase Requisition Approval Level 1
@@ -14,7 +72,7 @@ class PRApprovalLevel1Serializer(serializers.ModelSerializer):
 
     company_name = serializers.CharField(source='company.name', read_only=True)
     project_name = serializers.CharField(source='project.name', read_only=True)
-    req_date = serializers.DateField(source='requisition_date', read_only=True)
+    approval_status = serializers.CharField(source='status', read_only=True)
 
     class Meta:
         model = PurchaseRequisition
@@ -27,13 +85,24 @@ class PRApprovalLevel1Serializer(serializers.ModelSerializer):
             'project_name',
             'requisition_for',
             'requisition_type',
-            'req_date',
-
-
-            'level1_status',
-            'level1_approved_by',
-            'level1_approved_at',
-            'level1_remarks',
+            'requisition_date',
+            'requested_by',
+            'status',
+            'approval_status',
+        ]
+        read_only_fields = [
+            'id',
+            'company',
+            'company_name',
+            'project',
+            'project_name',
+            'pr_number',
+            'requisition_for',
+            'requisition_type',
+            'requisition_date',
+            'requested_by',
+            'status',
+            'approval_status',
         ]
 
 
@@ -237,44 +306,41 @@ class SRNApprovalLevel2Serializer(serializers.ModelSerializer):
             'level2_remarks',
         ]
 
-# Sales order approvals
 
-class SalesOrderApprovalLineSerializer(serializers.Serializer):
-    id = serializers.IntegerField(required=False, allow_null=True)
-    product_name = serializers.CharField()
-    uom = serializers.CharField()
-    qty = serializers.DecimalField(max_digits=10, decimal_places=2)
-    rate = serializers.DecimalField(max_digits=10, decimal_places=2)
-    tax_percent = serializers.DecimalField(max_digits=5, decimal_places=2)
-    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
-    sub_task = serializers.CharField(required=False, allow_blank=True)
-
-
-class SalesOrderApprovalDetailSerializer(serializers.ModelSerializer):
-    company_name = serializers.CharField(source="company.name", read_only=True)
-    customer_name = serializers.CharField(source="customer.name", read_only=True)
-    items = serializers.SerializerMethodField()
-
-    @extend_schema_field(SalesOrderApprovalLineSerializer(many=True))
-    def get_items(self, obj):
-        return SalesOrderApprovalLineSerializer(
-            obj.items_data or [],
-            many=True,
-        ).data
+# Sales Invoice Approvals
+class SalesInvoiceApprovalItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.product_name", read_only=True)
+    uom = serializers.CharField(source="unit.unit_name", read_only=True)
 
     class Meta:
-        model = SalesOrder
+        model = SalesInvoiceItem
         fields = [
             "id",
-            "entry_date",
-            "so_number",
-            "so_type",
-            "currency",
-            "exchange_rate",
-            "contact_person",
-            "customer_po_number",
-            "customer_po_date",
-            "active_status",
+            "product_name",
+            "uom",
+            "qty",
+            "rate",
+            "discount_type",
+            "discount_percent",
+            "tax_percent",
+            "amount",
+            "remarks",
+        ]
+
+
+class SalesInvoiceApprovalDetailSerializer(serializers.ModelSerializer):
+    company_name = serializers.CharField(source="company.name", read_only=True)
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
+    items = SalesInvoiceApprovalItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SalesInvoice
+        fields = [
+            "id",
+            "invoice_date",
+            "payment_due_date",
+            "invoice_number",
+            "remarks",
             "status",
             "company",
             "company_name",
@@ -285,13 +351,73 @@ class SalesOrderApprovalDetailSerializer(serializers.ModelSerializer):
         ]
 
 
-class SalesOrderApprovalListRowSerializer(serializers.Serializer):
+class SalesInvoiceApprovalListRowSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     sno = serializers.IntegerField()
-    entry_date = serializers.DateField()
-    sales_order_no = serializers.CharField()
+    invoice_date = serializers.DateField()
+    invoice_number = serializers.CharField()
     company_name = serializers.CharField()
     customer_name = serializers.CharField()
-    so_type = serializers.CharField()
-    active_status = serializers.CharField()
+    amount = serializers.CharField()
     approve_status = serializers.CharField()
+
+
+# Sales Invoice Create/Update
+class SalesInvoiceItemWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalesInvoiceItem
+        fields = [
+            "id",
+            "product",
+            "unit",
+            "qty",
+            "rate",
+            "discount_type",
+            "discount_percent",
+            "tax_percent",
+            "amount",
+            "remarks",
+        ]
+
+
+class SalesInvoiceCreateUpdateSerializer(serializers.ModelSerializer):
+    items = SalesInvoiceItemWriteSerializer(many=True, required=False)
+
+    class Meta:
+        model = SalesInvoice
+        fields = [
+            "id",
+            "invoice_date",
+            "payment_due_date",
+            "invoice_number",
+            "remarks",
+            "status",
+            "company",
+            "customer",
+            "items",
+        ]
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        invoice = SalesInvoice.objects.create(**validated_data)
+        
+        for item_data in items_data:
+            SalesInvoiceItem.objects.create(sales_invoice=invoice, **item_data)
+        
+        return invoice
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+        
+        # Update invoice fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Update items if provided
+        if items_data is not None:
+            instance.items.all().delete()
+            for item_data in items_data:
+                SalesInvoiceItem.objects.create(sales_invoice=instance, **item_data)
+        
+        return instance
