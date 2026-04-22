@@ -31,7 +31,19 @@ sales_order_approval_patterns = [
         "sales-order-approval/<int:pk>/",views.sales_order_approval_detail,name="sales-order-approval-detail",),
 ]
 
+# Sales invoice approval endpoints
+sales_invoice_approval_patterns = [
+    path(
+        "sales-invoice-approval/",views.sales_invoice_approval_list,name="sales-invoice-approval-list",),
+    path(
+        "sales-invoice-approval/<int:pk>/",views.sales_invoice_approval_detail,name="sales-invoice-approval-detail",),
+    path(
+        "sales-invoice-approval/create/",views.sales_invoice_create,name="sales-invoice-create",),
+    path(
+        "sales-invoice-approval/<int:pk>/update/",views.sales_invoice_update,name="sales-invoice-update",),
+]
+
 # Combine all patterns
 urlpatterns = [
     path('', include(router.urls)),
-] + sales_order_approval_patterns
+] + sales_order_approval_patterns + sales_invoice_approval_patterns

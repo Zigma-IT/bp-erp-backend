@@ -24,38 +24,79 @@ from .models import (
     TaxMaster,
     UnitMaster,
 )
+from purchase_master.models import ItemMaster
+
 
 
 # Rate order
-
 class RateOrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = RateOrderItem
-        fields = '__all__'
-        read_only_fields = ['id']
+        fields = ["id", "unique_id", "item_name", "rate", "from_date", "to_date"]
+        read_only_fields = ["id", "unique_id"]
 
 
 class RateOrderSerializer(serializers.ModelSerializer):
-    items = RateOrderItemSerializer(many=True)
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    item_count = serializers.SerializerMethodField()
+    items = RateOrderItemSerializer(many=True, required=False)
 
     class Meta:
         model = RateOrder
-        fields = '__all__'
-        read_only_fields = ['id', 'created_at']
+        fields = [
+            "id",
+            "unique_id",
+            "supplier",
+            "supplier_name",
+            "status",
+            "created_at",
+            "item_count",
+            "items",
+        ]
+        read_only_fields = [
+            "id",
+            "unique_id",
+            "supplier_name",
+            "created_at",
+            "item_count",
+        ]
+
+    def get_item_count(self, obj):
+        return obj.items.count()
+
+    def validate(self, attrs):
+        if self.instance is None and not attrs.get("items"):
+            raise serializers.ValidationError(
+                {"items": "At least one item row is required."}
+            )
+        return attrs
 
     def create(self, validated_data):
-        items_data = validated_data.pop('items')
+        items_data = validated_data.pop("items", [])
 
         rate_order = RateOrder.objects.create(**validated_data)
 
         for item in items_data:
-            RateOrderItem.objects.create(
-                rate_order=rate_order,
-                **item
-            )
+            RateOrderItem.objects.create(rate_order=rate_order, **item)
 
         return rate_order
-    
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop("items", None)
+
+        instance.supplier = validated_data.get("supplier", instance.supplier)
+        instance.status = validated_data.get("status", instance.status)
+        instance.save()
+
+        if items_data is not None:
+            instance.items.all().delete()
+            for item in items_data:
+                RateOrderItem.objects.create(rate_order=instance, **item)
+
+        return instance
+
+
 def _calculate_tax_amount(amount, tax):
     if not amount or not tax:
         return Decimal("0.00")
@@ -115,6 +156,12 @@ class UnitDropdownSerializer(serializers.ModelSerializer):
     class Meta:
         model = UnitMaster
         fields = ["id", "unit_name", "decimal_points"]
+
+
+class ItemDropdownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ItemMaster
+        fields = ["id", "item_name", "item_code"]
 
 
 class TaxDropdownSerializer(serializers.ModelSerializer):

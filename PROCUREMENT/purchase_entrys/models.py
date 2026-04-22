@@ -708,3 +708,4 @@ class SRNItem(UniqueIDMixin):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
 
     remarks = models.TextField(blank=True, null=True)
+    

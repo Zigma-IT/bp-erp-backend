@@ -4,7 +4,7 @@ from django.db.models import F, Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import status, viewsets
-from rest_framework.decorators import api_view
+from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
 from PROCUREMENT.schema_utils import (
@@ -28,9 +28,11 @@ from .models import (
     TaxMaster,
     UnitMaster,
 )
+from purchase_master.models import ItemMaster
 from .serializers import (
     CompanyDropdownSerializer,
     GRNSerializer,
+    ItemDropdownSerializer,
     ProductDropdownSerializer,
     ProjectDropdownSerializer,
     PurchaseOrderApprovalActionSerializer,
@@ -46,7 +48,7 @@ from .serializers import (
 
 # Rate order
 class RateOrderViewSet(viewsets.ModelViewSet):
-    queryset = RateOrder.objects.all().order_by('-created_at')
+    queryset = RateOrder.objects.select_related('supplier').prefetch_related('items').order_by('-created_at')
     serializer_class = RateOrderSerializer
 
     def get_queryset(self):
@@ -62,6 +64,14 @@ class RateOrderViewSet(viewsets.ModelViewSet):
             qs = qs.filter(status=status)
 
         return qs
+
+    @action(detail=True, methods=['patch'], url_path='toggle')
+    def toggle(self, request, pk=None):
+        rate_order = self.get_object()
+        rate_order.status = 'inactive' if rate_order.status == 'active' else 'active'
+        rate_order.save(update_fields=['status'])
+        serializer = self.get_serializer(rate_order)
+        return Response(serializer.data)
 
 # Purchase order
 PURCHASE_ORDER_FILTER_PARAMETERS = DATATABLE_PARAMETERS + [
@@ -350,6 +360,14 @@ def product_dropdown(request):
         queryset = queryset.filter(product_name__icontains=search_value)
 
     serializer = ProductDropdownSerializer(queryset.order_by("product_name"), many=True)
+    return Response(serializer.data)
+
+
+@extend_schema(responses=ItemDropdownSerializer(many=True))
+@api_view(["GET"])
+def item_dropdown(request):
+    queryset = ItemMaster.objects.filter(is_active=True).order_by("item_name")
+    serializer = ItemDropdownSerializer(queryset, many=True)
     return Response(serializer.data)
 
 
@@ -644,6 +662,7 @@ class GRNViewSet(viewsets.ModelViewSet):
         result = []
         for i, row in enumerate(data, 1):
             result.append({
+                "id": row["id"],
                 "sno": i,
                 "company_name": row['company_name'],
                 "project_name": row['project_name'],
@@ -683,6 +702,7 @@ class SRNViewSet(viewsets.ModelViewSet):
         result = []
         for i, row in enumerate(data, 1):
             result.append({
+                "id": row["id"],
                 "sno": i,
                 "company_name": row['company_name'],
                 "project_name": row['project_name'],
@@ -691,6 +711,7 @@ class SRNViewSet(viewsets.ModelViewSet):
                 "po_number": row['po_number'],
                 "srn_number": row['srn_number'],
                 "supplier_invoice_no": row['supplier_invoice_no'],
+                "approve_status": "pending",
             })
 
         return Response({"data": result})

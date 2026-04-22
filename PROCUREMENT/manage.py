@@ -1,7 +1,24 @@
 #!/usr/bin/env python
-"""Django's command-line utility for administrative tasks."""
 import os
 import sys
+from pathlib import Path
+
+
+def add_repo_venv_to_path():
+    """Allow `python3 manage.py` to use the repo's shared virtualenv."""
+    backend_root = Path(__file__).resolve().parents[1]
+    venv_root = backend_root / ".venv"
+
+    candidate_paths = [venv_root / "Lib" / "site-packages"]
+    candidate_paths.extend(sorted((venv_root / "lib").glob("python*/site-packages")))
+
+    for site_packages in candidate_paths:
+        if site_packages.exists():
+            sys.path.insert(0, str(site_packages))
+            return
+
+
+add_repo_venv_to_path()
 
 
 def main():

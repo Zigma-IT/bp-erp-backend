@@ -14,7 +14,7 @@ from PROCUREMENT.schema_utils import (
     query_str_parameter,
 )
 from purchase_entrys.models import GRN, PurchaseRequisition, SRN
-from sales.models import SalesOrder
+from sales.models import SalesOrder, SalesInvoice
 
 from .serializers import (
     GRNApprovalLevel1Serializer,
@@ -23,6 +23,9 @@ from .serializers import (
     PRApprovalLevel2Serializer,
     SalesOrderApprovalDetailSerializer,
     SalesOrderApprovalListRowSerializer,
+    SalesInvoiceApprovalDetailSerializer,
+    SalesInvoiceApprovalListRowSerializer,
+    SalesInvoiceCreateUpdateSerializer,
     SRNApprovalLevel1Serializer,
     SRNApprovalLevel2Serializer,
 )
@@ -141,19 +144,192 @@ def sales_order_approval_detail(request, pk):
     return Response(serializer.data)
 
 
+# Sales Invoice approval
+SALES_INVOICE_APPROVAL_FILTER_PARAMETERS = [
+    query_int_parameter("company", "Filter by company id."),
+    query_int_parameter("customer", "Filter by customer id."),
+    query_str_parameter("status", "Filter by approval status."),
+    query_date_parameter("from_date", "Filter from invoice date."),
+    query_date_parameter("to_date", "Filter to invoice date."),
+    SEARCH_PARAMETER,
+]
+
+SALES_INVOICE_APPROVAL_LIST_RESPONSE = inline_serializer(
+    name="SalesInvoiceApprovalListResponse",
+    fields={"data": SalesInvoiceApprovalListRowSerializer(many=True)},
+)
+
+
+def _sales_invoice_approval_queryset(request):
+    from django.db.models import Sum, DecimalField
+    from django.db.models.functions import Cast
+
+    queryset = SalesInvoice.objects.select_related("company", "customer").order_by(
+        "-invoice_date",
+        "-id",
+    )
+
+    company_id = request.GET.get("company")
+    customer_id = request.GET.get("customer")
+    status_filter = request.GET.get("status")
+    from_date = request.GET.get("from_date")
+    to_date = request.GET.get("to_date")
+    search_value = request.GET.get("search", "").strip()
+    if not search_value:
+        search_value = request.GET.get("search[value]", "").strip()
+
+    if company_id:
+        queryset = queryset.filter(company_id=company_id)
+    if customer_id:
+        queryset = queryset.filter(customer_id=customer_id)
+    if status_filter and status_filter.lower() != "all":
+        queryset = queryset.filter(status=status_filter)
+    if from_date:
+        queryset = queryset.filter(invoice_date__gte=from_date)
+    if to_date:
+        queryset = queryset.filter(invoice_date__lte=to_date)
+    if search_value:
+        queryset = queryset.filter(
+            Q(invoice_number__icontains=search_value)
+            | Q(company__name__icontains=search_value)
+            | Q(customer__name__icontains=search_value)
+            | Q(status__icontains=search_value)
+        )
+
+    return queryset
+
+
+@extend_schema(
+    operation_id="api_approvals_sales_invoice_approval_list",
+    parameters=SALES_INVOICE_APPROVAL_FILTER_PARAMETERS,
+    responses=SALES_INVOICE_APPROVAL_LIST_RESPONSE,
+)
+@api_view(["GET"])
+def sales_invoice_approval_list(request):
+    queryset = _sales_invoice_approval_queryset(request)
+    
+    # Calculate total amount for each invoice
+    data = []
+    for index, invoice in enumerate(queryset, start=1):
+        total_amount = sum(float(item.amount or 0) for item in invoice.items.all())
+        data.append(
+            {
+                "id": invoice.id,
+                "sno": index,
+                "invoice_date": invoice.invoice_date,
+                "invoice_number": invoice.invoice_number,
+                "company_name": invoice.company.name,
+                "customer_name": invoice.customer.name,
+                "amount": str(total_amount),
+                "approve_status": invoice.status,
+            }
+        )
+
+    return Response({"data": data})
+
+
+@extend_schema(
+    operation_id="api_approvals_sales_invoice_approval_detail",
+    responses=SalesInvoiceApprovalDetailSerializer,
+)
+@api_view(["GET"])
+def sales_invoice_approval_detail(request, pk):
+    sales_invoice = get_object_or_404(
+        SalesInvoice.objects.select_related("company", "customer").prefetch_related(
+            "items__product",
+            "items__unit",
+        ),
+        pk=pk,
+    )
+    serializer = SalesInvoiceApprovalDetailSerializer(sales_invoice)
+    return Response(serializer.data)
+
+
+@extend_schema(
+    operation_id="api_approvals_sales_invoice_create",
+    request=SalesInvoiceCreateUpdateSerializer,
+    responses=SalesInvoiceApprovalDetailSerializer,
+)
+@api_view(["POST"])
+def sales_invoice_create(request):
+    serializer = SalesInvoiceCreateUpdateSerializer(data=request.data)
+    if serializer.is_valid():
+        instance = serializer.save()
+        # Return the detailed representation
+        detail_serializer = SalesInvoiceApprovalDetailSerializer(
+            SalesInvoice.objects.select_related("company", "customer").prefetch_related(
+                "items__product",
+                "items__unit",
+            ).get(pk=instance.pk)
+        )
+        return Response(detail_serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(
+    operation_id="api_approvals_sales_invoice_update",
+    request=SalesInvoiceCreateUpdateSerializer,
+    responses=SalesInvoiceApprovalDetailSerializer,
+)
+@api_view(["PUT"])
+def sales_invoice_update(request, pk):
+    sales_invoice = get_object_or_404(SalesInvoice, pk=pk)
+    serializer = SalesInvoiceCreateUpdateSerializer(sales_invoice, data=request.data)
+    if serializer.is_valid():
+        instance = serializer.save()
+        # Return the detailed representation
+        detail_serializer = SalesInvoiceApprovalDetailSerializer(
+            SalesInvoice.objects.select_related("company", "customer").prefetch_related(
+                "items__product",
+                "items__unit",
+            ).get(pk=instance.pk)
+        )
+        return Response(detail_serializer.data)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 # Purchase Rquisition Approval Level 1
 class PRApprovalLevel1ViewSet(viewsets.ModelViewSet):
-    queryset = PurchaseRequisition.objects.all()
+    queryset = PurchaseRequisition.objects.select_related("company", "project").all()
     serializer_class = PRApprovalLevel1Serializer
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        pr_number = self.request.query_params.get("pr_number")
+        company = self.request.query_params.get("company")
+        project = self.request.query_params.get("project")
+        requisition_type = self.request.query_params.get("requisition_type")
+        requisition_for = self.request.query_params.get("requisition_for")
+        req_date = self.request.query_params.get("req_date") or self.request.query_params.get("requisition_date")
+        status_param = self.request.query_params.get("status")
+        search_value = self.request.query_params.get("search", "").strip()
+        if not search_value:
+            search_value = self.request.query_params.get("search[value]", "").strip()
 
-        # Only show Level 1 relevant records
-        status_param = self.request.query_params.get('status')
-
-        if status_param:
-            queryset = queryset.filter(level1_status=status_param)
+        if pr_number:
+            queryset = queryset.filter(pr_number__icontains=pr_number)
+        if company:
+            queryset = queryset.filter(company_id=company)
+        if project:
+            queryset = queryset.filter(project_id=project)
+        if requisition_type:
+            queryset = queryset.filter(requisition_type=requisition_type)
+        if requisition_for:
+            queryset = queryset.filter(requisition_for=requisition_for)
+        if req_date:
+            queryset = queryset.filter(requisition_date=req_date)
+        if status_param and status_param.lower() != "all":
+            queryset = queryset.filter(status=status_param)
+        if search_value:
+            queryset = queryset.filter(
+                Q(pr_number__icontains=search_value)
+                | Q(company__name__icontains=search_value)
+                | Q(project__name__icontains=search_value)
+                | Q(requisition_for__icontains=search_value)
+                | Q(requisition_type__icontains=search_value)
+                | Q(requested_by__icontains=search_value)
+                | Q(status__icontains=search_value)
+            )
 
         return queryset.order_by('-id')
 
@@ -161,10 +337,8 @@ class PRApprovalLevel1ViewSet(viewsets.ModelViewSet):
     def approve(self, request, pk=None):
         pr = self.get_object()
 
-        pr.level1_status = 'approved'
-        pr.level1_approved_by = request.user
-        pr.level1_approved_at = timezone.now()
-        pr.save()
+        pr.status = 'approved'
+        pr.save(update_fields=['status'])
 
         return Response({'message': 'Level 1 Approved'})
 
@@ -172,11 +346,8 @@ class PRApprovalLevel1ViewSet(viewsets.ModelViewSet):
     def reject(self, request, pk=None):
         pr = self.get_object()
 
-        pr.level1_status = 'rejected'
-        pr.level1_remarks = request.data.get('remarks')
-        pr.level1_approved_by = request.user
-        pr.level1_approved_at = timezone.now()
-        pr.save()
+        pr.status = 'rejected'
+        pr.save(update_fields=['status'])
 
         return Response({'message': 'Level 1 Rejected'})
     
