@@ -1197,7 +1197,6 @@ def item_dropdown(request):
             "status": False,
             "message": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-<<<<<<< HEAD
 
 
 unit_list = extend_schema(
@@ -1348,5 +1347,3 @@ product_dropdown = extend_schema(
 item_dropdown = extend_schema(
     responses=OpenApiTypes.OBJECT,
 )(item_dropdown)
-=======
->>>>>>> origin/dev

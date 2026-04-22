@@ -431,7 +431,6 @@ def toggle_user_type_permission(request, pk):
     obj.save()
 
     return Response({"message": "Status toggled", "status": obj.status})
-<<<<<<< HEAD
 
 
 user_list = extend_schema(
@@ -513,5 +512,3 @@ toggle_user_type_permission = extend_schema(
     request=None,
     responses=OpenApiTypes.OBJECT,
 )(toggle_user_type_permission)
-=======
->>>>>>> origin/dev

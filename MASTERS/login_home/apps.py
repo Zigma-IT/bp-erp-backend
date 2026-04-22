@@ -6,6 +6,8 @@ class LoginConfig(AppConfig):
     name = 'login_home'
 
     def ready(self):
-        from .bootstrap import ensure_dev_admin_user
-
-        ensure_dev_admin_user()
+        try:
+            from .bootstrap import ensure_dev_admin_user
+            ensure_dev_admin_user()
+        except Exception:
+            return
