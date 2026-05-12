@@ -2,11 +2,13 @@
 
 from typing import Any, cast
 
+from django.db import connections
 from django.db.models import F, Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import status, viewsets
-from rest_framework.decorators import action, api_view
+from rest_framework.decorators import action, api_view, parser_classes
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
 from PROCUREMENT.schema_utils import (
@@ -18,6 +20,7 @@ from PROCUREMENT.schema_utils import (
 )
 from common_master.models import Company as CompanyMaster
 from common_master.models import Project as ProjectMaster
+from common_master.models import SupplierProfile as SupplierProfileMaster
 from common_master.models import Tax as TaxMaster
 from purchase_master.models import ProductCreation as ProductMaster
 from purchase_master.models import UnitMaster
@@ -26,8 +29,11 @@ from .models import (
     GRN,
     PurchaseOrder,
     PurchaseOrderApproval,
+    PurchaseOrderDocument,
+    PurchaseRequisitionDocument,
     PurchaseRequisition,
     RateOrder,
+    RateOrderDocument,
     SRN,
     Supplier,
 )
@@ -40,8 +46,14 @@ from .serializers import (
     ProjectDropdownSerializer,
     PurchaseOrderApprovalActionSerializer,
     PurchaseOrderSerializer,
+    PurchaseOrderDocumentCreateSerializer,
+    PurchaseOrderDocumentSerializer,
+    PurchaseRequisitionDocumentCreateSerializer,
+    PurchaseRequisitionDocumentSerializer,
     PurchaseRequisitionListRowSerializer,
     PurchaseRequisitionSerializer,
+    RateOrderDocumentCreateSerializer,
+    RateOrderDocumentSerializer,
     RateOrderSerializer,
     SRNSerializer,
     SupplierSerializer,
@@ -49,9 +61,47 @@ from .serializers import (
     UnitDropdownSerializer,
 )
 
+
+def _masters_db_alias():
+    return "masters_db" if "masters_db" in connections.databases else "default"
+
+
+def _sync_procurement_suppliers_from_master():
+    """
+    Keep the procurement supplier dropdown aligned with the supplier master.
+
+    Procurement transactions still reference the local `purchase_entrys.Supplier`
+    model, while the new supplier-creation UI writes into
+    `common_master.SupplierProfile`. For dropdown-driven flows like rate orders,
+    we sync active master suppliers into the procurement table on demand.
+    """
+
+    master_suppliers = SupplierProfileMaster.objects.using(_masters_db_alias()).filter(
+        is_delete=False,
+        is_active=True,
+    ).select_related("msme_type").order_by("vendor_name")
+
+    for master_supplier in master_suppliers:
+        Supplier.objects.update_or_create(
+            name=master_supplier.vendor_name.strip(),
+            defaults={
+                "gst_no": master_supplier.gst_no or "",
+                "pan_no": master_supplier.pan_no or "",
+                "msme_type": (
+                    master_supplier.msme_type.name
+                    if getattr(master_supplier, "msme_type", None)
+                    else ""
+                ),
+                "contact_person": "",
+                "contact_no": master_supplier.phone_no or "",
+                "address": master_supplier.address or "",
+                "is_active": bool(master_supplier.is_active),
+            },
+        )
+
 # Rate order
 class RateOrderViewSet(viewsets.ModelViewSet):
-    queryset = RateOrder.objects.select_related('supplier').prefetch_related('items').order_by('-created_at')
+    queryset = RateOrder.objects.select_related('supplier').order_by('-created_at')
     serializer_class = RateOrderSerializer
 
     def get_queryset(self):
@@ -75,6 +125,32 @@ class RateOrderViewSet(viewsets.ModelViewSet):
         rate_order.save(update_fields=['status'])
         serializer = self.get_serializer(rate_order)
         return Response(serializer.data)
+
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        parser_classes=[MultiPartParser, FormParser],
+        url_path="documents",
+    )
+    def documents(self, request, pk=None):
+        rate_order = self.get_object()
+
+        if request.method == "GET":
+            serializer = RateOrderDocumentSerializer(rate_order.documents.all(), many=True)
+            return Response(serializer.data)
+
+        serializer = RateOrderDocumentCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        document = serializer.save(rate_order=rate_order)
+        response_serializer = RateOrderDocumentSerializer(document)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["delete"], url_path=r"documents/(?P<document_id>[^/.]+)")
+    def delete_document(self, request, pk=None, document_id=None):
+        rate_order = self.get_object()
+        document = get_object_or_404(rate_order.documents.all(), pk=document_id)
+        document.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 # Purchase order
 PURCHASE_ORDER_FILTER_PARAMETERS = DATATABLE_PARAMETERS + [
@@ -353,7 +429,11 @@ def _apply_receipt_filters(queryset, request):
 )
 @api_view(["GET"])
 def product_dropdown(request):
-    queryset = ProductMaster.objects.filter(is_active=True).select_related("company")
+    queryset = (
+        ProductMaster.objects.using(_masters_db_alias())
+        .filter(is_active=True)
+        .select_related("company")
+    )
     company_id = request.GET.get("company")
     search_value = request.GET.get("search", "").strip()
 
@@ -369,7 +449,11 @@ def product_dropdown(request):
 @extend_schema(responses=ItemDropdownSerializer(many=True))
 @api_view(["GET"])
 def item_dropdown(request):
-    queryset = ItemMaster.objects.filter(is_active=True).order_by("item_name")
+    queryset = (
+        ItemMaster.objects.using(_masters_db_alias())
+        .filter(is_active=True)
+        .order_by("item_name")
+    )
     serializer = ItemDropdownSerializer(queryset, many=True)
     return Response(serializer.data)
 
@@ -377,7 +461,11 @@ def item_dropdown(request):
 @extend_schema(responses=CompanyDropdownSerializer(many=True))
 @api_view(["GET"])
 def company_dropdown(request):
-    queryset = CompanyMaster.objects.filter(is_active=True).order_by("name")
+    queryset = (
+        CompanyMaster.objects.using(_masters_db_alias())
+        .filter(is_active=True)
+        .order_by("name")
+    )
     serializer = CompanyDropdownSerializer(queryset, many=True)
     return Response(serializer.data)
 
@@ -388,7 +476,11 @@ def company_dropdown(request):
 )
 @api_view(["GET"])
 def project_dropdown(request):
-    queryset = ProjectMaster.objects.filter(is_active=True).select_related("company")
+    queryset = (
+        ProjectMaster.objects.using(_masters_db_alias())
+        .filter(is_active=True)
+        .select_related("company")
+    )
     company_id = request.GET.get("company")
     if company_id:
         queryset = queryset.filter(company_id=company_id)
@@ -399,6 +491,7 @@ def project_dropdown(request):
 @extend_schema(responses=SupplierSerializer(many=True))
 @api_view(["GET"])
 def supplier_dropdown(request):
+    _sync_procurement_suppliers_from_master()
     queryset = Supplier.objects.filter(is_active=True).order_by("name")
     serializer = SupplierSerializer(queryset, many=True)
     return Response(serializer.data)
@@ -407,7 +500,11 @@ def supplier_dropdown(request):
 @extend_schema(responses=UnitDropdownSerializer(many=True))
 @api_view(["GET"])
 def unit_dropdown(request):
-    queryset = UnitMaster.objects.filter(is_active=True).order_by("unit_name")
+    queryset = (
+        UnitMaster.objects.using(_masters_db_alias())
+        .filter(is_active=True)
+        .order_by("unit_name")
+    )
     serializer = UnitDropdownSerializer(queryset, many=True)
     return Response(serializer.data)
 
@@ -415,7 +512,11 @@ def unit_dropdown(request):
 @extend_schema(responses=TaxDropdownSerializer(many=True))
 @api_view(["GET"])
 def tax_dropdown(request):
-    queryset = TaxMaster.objects.filter(is_active=True).order_by("name")
+    queryset = (
+        TaxMaster.objects.using(_masters_db_alias())
+        .filter(is_active=True)
+        .order_by("name")
+    )
     serializer = TaxDropdownSerializer(queryset, many=True)
     return Response(serializer.data)
 
@@ -488,6 +589,46 @@ def purchase_order_detail(request, pk):
     purchase_order = get_object_or_404(queryset, pk=pk)
     serializer = PurchaseOrderSerializer(purchase_order)
     return Response(serializer.data)
+
+
+@extend_schema(
+    operation_id="api_purchase_entrys_purchase_order_documents",
+    request=PurchaseOrderDocumentCreateSerializer,
+    responses=PurchaseOrderDocumentSerializer(many=True),
+)
+@api_view(["GET", "POST"])
+@parser_classes([MultiPartParser, FormParser])
+def purchase_order_documents(request, pk):
+    purchase_order = get_object_or_404(PurchaseOrder, pk=pk)
+
+    if request.method == "GET":
+        serializer = PurchaseOrderDocumentSerializer(
+            purchase_order.documents.all(),
+            many=True,
+        )
+        return Response(serializer.data)
+
+    serializer = PurchaseOrderDocumentCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    document = serializer.save(purchase_order=purchase_order)
+    response_serializer = PurchaseOrderDocumentSerializer(document)
+    return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(
+    operation_id="api_purchase_entrys_purchase_order_document_delete",
+    responses={204: None},
+)
+@api_view(["DELETE"])
+def delete_purchase_order_document(request, pk, document_id):
+    purchase_order = get_object_or_404(PurchaseOrder, pk=pk)
+    document = get_object_or_404(
+        PurchaseOrderDocument,
+        pk=document_id,
+        purchase_order=purchase_order,
+    )
+    document.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(
@@ -630,11 +771,51 @@ def create_purchase_requisition(request):
 @api_view(["GET"])
 def purchase_requisition_detail(request, pk):
     purchase_requisition = get_object_or_404(
-        PurchaseRequisition.objects.select_related("company", "project"),
+        PurchaseRequisition.objects.select_related("company", "project").prefetch_related("documents"),
         pk=pk,
     )
     serializer = PurchaseRequisitionSerializer(purchase_requisition)
     return Response(serializer.data)
+
+
+@extend_schema(
+    operation_id="api_purchase_entrys_purchase_requisition_documents",
+    request=PurchaseRequisitionDocumentCreateSerializer,
+    responses=PurchaseRequisitionDocumentSerializer(many=True),
+)
+@api_view(["GET", "POST"])
+@parser_classes([MultiPartParser, FormParser])
+def purchase_requisition_documents(request, pk):
+    purchase_requisition = get_object_or_404(PurchaseRequisition, pk=pk)
+
+    if request.method == "GET":
+        serializer = PurchaseRequisitionDocumentSerializer(
+            purchase_requisition.documents.all(),
+            many=True,
+        )
+        return Response(serializer.data)
+
+    serializer = PurchaseRequisitionDocumentCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    document = serializer.save(purchase_requisition=purchase_requisition)
+    response_serializer = PurchaseRequisitionDocumentSerializer(document)
+    return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(
+    operation_id="api_purchase_entrys_purchase_requisition_document_delete",
+    responses={204: None},
+)
+@api_view(["DELETE"])
+def delete_purchase_requisition_document(request, pk, document_id):
+    purchase_requisition = get_object_or_404(PurchaseRequisition, pk=pk)
+    document = get_object_or_404(
+        PurchaseRequisitionDocument,
+        pk=document_id,
+        purchase_requisition=purchase_requisition,
+    )
+    document.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 # GRN
 class GRNViewSet(viewsets.ModelViewSet):

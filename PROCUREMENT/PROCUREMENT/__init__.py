@@ -1,1 +1,0 @@
-"""PROCUREMENT Django project package."""

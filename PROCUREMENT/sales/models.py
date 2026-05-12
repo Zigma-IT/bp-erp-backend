@@ -19,72 +19,17 @@ class UniqueIDMixin(models.Model):
     class Meta:
         abstract = True
 
-
 class Customer(UniqueIDMixin):
-    name = models.CharField(max_length=255)
+    customer_name = models.CharField(max_length=255)
+
+
+    class Meta(UniqueIDMixin.Meta):
+        abstract = False
+        db_table = "customer_profile"
+        managed = False
 
     def __str__(self):
-        return self.name
-
-
-
-# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Sales Invoice >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-class SalesInvoice(UniqueIDMixin):
-    STATUS_CHOICES = (
-        ('draft', 'Draft'),
-        ('approved', 'Approved'),
-        ('cancelled', 'Cancelled'),
-    )
-
-    entry_date = models.DateField()
-    due_date = models.DateField()
-
-    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE)
-    project = models.ForeignKey('common_master.Project', on_delete=models.CASCADE, null=True, blank=True)
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
-    items_data = models.JSONField(default=list, blank=True)
-
-    invoice_number = models.CharField(max_length=100, unique=True, blank=True)
-
-    remarks = models.TextField(blank=True, null=True)
-
-    basic_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
-    total_gst = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
-    round_off = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
-    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
-
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def generate_invoice_number(self):
-        entry_date = self.entry_date or timezone.localdate()
-        fy_start = entry_date.year if entry_date.month >= 4 else entry_date.year - 1
-        fy_end = fy_start + 1
-        company_code = (self.company.code or "GEN").upper()
-
-        prefix = f"INV/{fy_start}-{fy_end}/{company_code}"
-
-        last = SalesInvoice.objects.filter(invoice_number__startswith=prefix)\
-            .order_by('-id').values_list('invoice_number', flat=True).first()
-
-        next_no = 1
-        if last:
-            try:
-                next_no = int(last.split('/')[-1]) + 1
-            except (IndexError, ValueError):
-                next_no = SalesInvoice.objects.filter(invoice_number__startswith=prefix).count() + 1
-
-        return f"{prefix}/{next_no:03d}"
-
-    def save(self, *args, **kwargs):
-        try:
-            company = self.company
-        except CompanyMaster.DoesNotExist:
-            company = None
-        if not self.invoice_number and company and company.pk is not None:
-            self.invoice_number = self.generate_invoice_number()
-        super().save(*args, **kwargs)
+        return self.customer_name
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Sales order >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -96,8 +41,8 @@ class SalesOrder(UniqueIDMixin):
     )
 
     entry_date = models.DateField()
-    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE)
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
+    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE, db_constraint=False)
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, db_constraint=False)
     items_data = models.JSONField(default=list, blank=True)
     so_number = models.CharField(max_length=100, unique=True, blank=True)
     so_type = models.CharField(max_length=100)
@@ -158,7 +103,7 @@ class OrderedBOM(UniqueIDMixin):
         ('without_material', 'Without Materials'),
     )
 
-    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE)
+    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE, db_constraint=False)
     sales_order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE)
     items_data = models.JSONField(default=list, blank=True)
 
@@ -177,7 +122,7 @@ class ExpenseEntry(UniqueIDMixin):
         ('rejected', 'Rejected'),
     )
 
-    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE)
+    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE, db_constraint=False)
     project = models.ForeignKey('common_master.Project', on_delete=models.CASCADE)
 
     supplier = models.ForeignKey('purchase_entrys.Supplier', on_delete=models.SET_NULL, null=True, blank=True)
@@ -222,8 +167,8 @@ class SalesInvoice(UniqueIDMixin):
     invoice_date = models.DateField()
     payment_due_date = models.DateField(blank=True, null=True)
 
-    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE)
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
+    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE, db_constraint=False)
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, db_constraint=False)
 
     invoice_number = models.CharField(max_length=100, unique=True, blank=True)
 
@@ -283,6 +228,7 @@ class SalesInvoiceItem(UniqueIDMixin):
         related_name='sales_invoice_items',
         null=True,
         blank=True,
+        db_constraint=False,
     )
     unit = models.ForeignKey(
         UnitMaster,
@@ -290,6 +236,7 @@ class SalesInvoiceItem(UniqueIDMixin):
         related_name='sales_invoice_items',
         null=True,
         blank=True,
+        db_constraint=False,
     )
     qty = models.DecimalField(max_digits=10, decimal_places=2)
     rate = models.DecimalField(max_digits=10, decimal_places=2)
@@ -325,12 +272,13 @@ class PurchaseExpense(UniqueIDMixin):
     )
 
     expense_date = models.DateField()
-    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE)
+    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE, db_constraint=False)
     project = models.ForeignKey(
         ProjectMaster,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
+        db_constraint=False,
     )
     supplier = models.ForeignKey(
         Supplier,
@@ -345,12 +293,14 @@ class PurchaseExpense(UniqueIDMixin):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
+        db_constraint=False,
     )
     sub_category = models.ForeignKey(
         SubGroup,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
+        db_constraint=False,
     )
     payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPE_CHOICES)
     expense_number = models.CharField(max_length=100, unique=True, blank=True)
@@ -411,6 +361,7 @@ class PurchaseExpenseItem(UniqueIDMixin):
         related_name="purchase_expense_items",
         null=True,
         blank=True,
+        db_constraint=False,
     )
     unit = models.ForeignKey(
         UnitMaster,
@@ -418,6 +369,7 @@ class PurchaseExpenseItem(UniqueIDMixin):
         related_name="purchase_expense_items",
         null=True,
         blank=True,
+        db_constraint=False,
     )
     qty = models.DecimalField(max_digits=10, decimal_places=2)
     rate = models.DecimalField(max_digits=10, decimal_places=2)

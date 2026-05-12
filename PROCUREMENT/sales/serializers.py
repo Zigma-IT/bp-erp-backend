@@ -3,155 +3,80 @@
 import uuid
 from decimal import Decimal
 
+from django.db import connections
 from django.db import transaction
 from rest_framework import serializers
 
 from .models import (
-    ProductMaster,
     PurchaseExpense,
     PurchaseExpenseItem,
+    Customer,
     SalesOrder,
-    SalesOrderItem,
     SalesInvoice,
     SalesInvoiceItem,
-    UnitMaster,
 )
+from common_master.models import Company as CompanyMaster
+from common_master.models import CustomerProfile as CustomerMaster
+from purchase_master.models import ProductCreation as ProductMaster
+from purchase_master.models import UnitMaster
 
 
-class SalesOrderItemSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source="product.product_name", read_only=True)
-    uom = serializers.CharField(source="unit.unit_name", read_only=True)
+def _masters_db_alias():
+    return "masters_db" if "masters_db" in connections.databases else "default"
 
-    class Meta:
-        model = SalesInvoice
-        fields = [
-            "id",
-            "unique_id",
-            "entry_date",
-            "due_date",
-            "company",
-            "project",
-            "customer",
-            "invoice_number",
-            "remarks",
-            "basic_amount",
-            "total_gst",
-            "round_off",
-            "total_amount",
-            "status",
-            "created_at",
-            "items",
-        ]
-        read_only_fields = [
-            "id",
-            "unique_id",
-            "invoice_number",
-            "basic_amount",
-            "total_gst",
-            "total_amount",
-            "created_at",
-        ]
 
-    def validate(self, attrs):
-        items = attrs.get("items_data")
-        company = attrs.get("company") or getattr(self.instance, "company", None)
+def _as_decimal(value):
+    if value in (None, ""):
+        return Decimal("0.00")
+    return Decimal(str(value))
 
-        if self.instance is None and not items:
-            raise serializers.ValidationError({"items": "At least one invoice row is required."})
-        if items is not None and not items:
-            raise serializers.ValidationError({"items": "At least one invoice row is required."})
 
-        if items and company:
-            for item in items:
-                product = _get_product(item["product"])
-                if not _belongs_to_company(product, company):
-                    raise serializers.ValidationError(
-                        {
-                            "items": (
-                                f"Product '{product.product_name}' does not belong to "
-                                f"company '{company.name}'."
-                            )
-                        }
-                    )
-        return attrs
+def _line_id(item, fallback):
+    return item.get("id") or fallback
 
-    def _normalise_items(self, items_data, invoice=None):
-        rows = []
-        basic = Decimal("0.00")
-        gst_total = Decimal("0.00")
 
-        for index, item in enumerate(items_data, start=1):
-            product = _get_product(item["product"])
-            unit = _get_unit(item["unit"])
-            net, tax_amount, total = _calculate_commercial_line(item)
-            rows.append(
-                {
-                    "id": _line_id(item, index),
-                    "unique_id": _line_unique_id(item),
-                    "invoice": invoice.pk if invoice and invoice.pk else item.get("invoice"),
-                    "product": product.pk,
-                    "product_name": product.product_name,
-                    "unit": unit.pk,
-                    "uom": unit.unit_name,
-                    "qty": _decimal_to_json(item["qty"]),
-                    "rate": _decimal_to_json(item["rate"]),
-                    "discount_type": item.get("discount_type") or "",
-                    "discount_percent": _decimal_to_json(item.get("discount_percent")),
-                    "tax_percent": _decimal_to_json(item.get("tax_percent")),
-                    "amount": _decimal_to_json(total),
-                    "remarks": item.get("remarks") or "",
-                }
-            )
-            basic += net
-            gst_total += tax_amount
+def _line_unique_id(item):
+    value = item.get("unique_id")
+    return str(value) if value else str(uuid.uuid4())
 
-        return rows, basic, gst_total
 
-    def _stored_totals(self, stored_items):
-        basic = Decimal("0.00")
-        gst_total = Decimal("0.00")
-        for item in stored_items:
-            net, tax_amount, _total = _calculate_commercial_line(item)
-            basic += net
-            gst_total += tax_amount
-        return basic, gst_total
+def _decimal_to_json(value):
+    return str(_as_decimal(value))
 
-    def _save_amounts(self, invoice, stored_items, basic, gst_total):
-        invoice.items_data = stored_items
-        invoice.basic_amount = basic
-        invoice.total_gst = gst_total
-        invoice.total_amount = basic + gst_total + invoice.round_off
-        invoice.save(
-            update_fields=[
-                "items_data",
-                "basic_amount",
-                "total_gst",
-                "total_amount",
-            ]
+
+def _belongs_to_company(product, company):
+    return product.company_id == company.id
+
+
+def _get_product(product_id):
+    try:
+        return ProductMaster.objects.using(_masters_db_alias()).get(pk=product_id)
+    except ProductMaster.DoesNotExist as exc:
+        raise serializers.ValidationError(
+            {"items": f"Invalid product id '{product_id}'."}
+        ) from exc
+
+
+def _get_unit(unit_id):
+    try:
+        return UnitMaster.objects.using(_masters_db_alias()).get(pk=unit_id)
+    except UnitMaster.DoesNotExist as exc:
+        raise serializers.ValidationError(
+            {"items": f"Invalid unit id '{unit_id}'."}
+        ) from exc
+
+
+def _get_customer(customer_id):
+    try:
+        return CustomerMaster.objects.using(_masters_db_alias()).get(
+            pk=customer_id,
+            is_delete=False,
+            is_active=True,
         )
-
-    @transaction.atomic
-    def create(self, validated_data):
-        items_data = validated_data.pop("items_data")
-        invoice = SalesInvoice.objects.create(**validated_data)
-        stored_items, basic, gst_total = self._normalise_items(items_data, invoice)
-        self._save_amounts(invoice, stored_items, basic, gst_total)
-        return invoice
-
-    @transaction.atomic
-    def update(self, instance, validated_data):
-        items_data = validated_data.pop("items_data", None)
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-
-        if items_data is None:
-            stored_items = instance.items_data or []
-            basic, gst_total = self._stored_totals(stored_items)
-        else:
-            stored_items, basic, gst_total = self._normalise_items(items_data, instance)
-        self._save_amounts(instance, stored_items, basic, gst_total)
-        return instance
+    except CustomerMaster.DoesNotExist as exc:
+        raise serializers.ValidationError(
+            {"customer": f"Invalid customer id '{customer_id}'."}
+        ) from exc
 
 
 # >>>>>>>>>>>>>>>>>>>>>>>>>>> Sales Order >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -183,7 +108,7 @@ class SalesOrderLineSerializer(serializers.Serializer):
             company_id = root_serializer.initial_data.get("company")
 
         if not mutable_data.get("product") and mutable_data.get("product_name"):
-            queryset = ProductCreation.objects.all()
+            queryset = ProductMaster.objects.all()
             if company_id:
                 queryset = queryset.filter(company_id=company_id)
             product = queryset.filter(product_name=mutable_data["product_name"]).first()
@@ -218,7 +143,14 @@ class SalesOrderLineSerializer(serializers.Serializer):
 
 
 class SalesOrderSerializer(serializers.ModelSerializer):
+    company = serializers.PrimaryKeyRelatedField(queryset=CompanyMaster.objects.none())
+    customer = serializers.IntegerField(source="customer_id")
     items = SalesOrderLineSerializer(many=True, source="items_data", required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        db_alias = _masters_db_alias()
+        self.fields["company"].queryset = CompanyMaster.objects.using(db_alias).all()
 
     class Meta:
         model = SalesOrder
@@ -244,6 +176,7 @@ class SalesOrderSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         company = attrs.get("company") or getattr(self.instance, "company", None)
+        customer_id = attrs.get("customer_id", getattr(self.instance, "customer_id", None))
         items = attrs.get("items_data")
 
         if self.instance is None and not items:
@@ -267,6 +200,9 @@ class SalesOrderSerializer(serializers.ModelSerializer):
                             )
                         }
                     )
+
+        if customer_id:
+            _get_customer(customer_id)
 
         return attrs
 
@@ -301,17 +237,21 @@ class SalesOrderSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
+        customer_id = validated_data.pop("customer_id")
         items_data = validated_data.pop("items_data")
-        sales_order = SalesOrder.objects.create(**validated_data)
+        sales_order = SalesOrder.objects.create(customer_id=customer_id, **validated_data)
         sales_order.items_data = self._normalise_items(items_data)
         sales_order.save(update_fields=["items_data"])
         return sales_order
 
     @transaction.atomic
     def update(self, instance, validated_data):
+        customer_id = validated_data.pop("customer_id", None)
         items_data = validated_data.pop("items_data", None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+        if customer_id is not None:
+            instance.customer_id = customer_id
         if items_data is not None:
             instance.items_data = self._normalise_items(items_data)
         instance.save()
@@ -332,8 +272,16 @@ class SalesOrderListRowSerializer(serializers.Serializer):
 
 # Sales Invoice
 class SalesInvoiceItemSerializer(serializers.ModelSerializer):
+    product = serializers.PrimaryKeyRelatedField(queryset=ProductMaster.objects.none())
+    unit = serializers.PrimaryKeyRelatedField(queryset=UnitMaster.objects.none())
     product_name = serializers.CharField(source="product.product_name", read_only=True)
     uom = serializers.CharField(source="unit.unit_name", read_only=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        db_alias = _masters_db_alias()
+        self.fields["product"].queryset = ProductMaster.objects.using(db_alias).all()
+        self.fields["unit"].queryset = UnitMaster.objects.using(db_alias).all()
 
     class Meta:
         model = SalesInvoiceItem
@@ -396,15 +344,25 @@ class SalesInvoiceItemSerializer(serializers.ModelSerializer):
 
 
 class SalesInvoiceSerializer(serializers.ModelSerializer):
+    company = serializers.PrimaryKeyRelatedField(queryset=CompanyMaster.objects.none())
+    customer = serializers.IntegerField(source="customer_id")
+    project = serializers.IntegerField(required=False, allow_null=True, write_only=True)
     items = SalesInvoiceItemSerializer(many=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        db_alias = _masters_db_alias()
+        self.fields["company"].queryset = CompanyMaster.objects.using(db_alias).all()
 
     class Meta:
         model = SalesInvoice
         fields = "__all__"
-        read_only_fields = ["id", "invoice_number", "created_at"]
+        read_only_fields = ["id", "created_at"]
 
     def validate(self, attrs):
+        attrs.pop("project", None)
         company = attrs.get("company") or getattr(self.instance, "company", None)
+        customer_id = attrs.get("customer_id", getattr(self.instance, "customer_id", None))
         items = attrs.get("items")
 
         if self.instance is None and not items:
@@ -425,12 +383,17 @@ class SalesInvoiceSerializer(serializers.ModelSerializer):
                         }
                     )
 
+        if customer_id:
+            _get_customer(customer_id)
+
         return attrs
 
     @transaction.atomic
     def create(self, validated_data):
+        validated_data.pop("project", None)
+        customer_id = validated_data.pop("customer_id")
         items_data = validated_data.pop("items")
-        invoice = SalesInvoice.objects.create(**validated_data)
+        invoice = SalesInvoice.objects.create(customer_id=customer_id, **validated_data)
 
         hundred = Decimal("100")
 
@@ -456,10 +419,14 @@ class SalesInvoiceSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
+        validated_data.pop("project", None)
+        customer_id = validated_data.pop("customer_id", None)
         items_data = validated_data.pop("items", None)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+        if customer_id is not None:
+            instance.customer_id = customer_id
         instance.save()
 
         if items_data is not None:
@@ -530,7 +497,7 @@ class PurchaseExpenseItemSerializer(serializers.ModelSerializer):
             company_id = root_serializer.initial_data.get("company")
 
         if not mutable_data.get("product") and mutable_data.get("product_name"):
-            queryset = ProductMaster.objects.all()
+            queryset = ProductMaster.objects.using(_masters_db_alias()).all()
             if company_id:
                 queryset = queryset.filter(company_id=company_id)
             product = queryset.filter(product_name=mutable_data["product_name"]).first()
@@ -541,7 +508,11 @@ class PurchaseExpenseItemSerializer(serializers.ModelSerializer):
             mutable_data["product"] = product.pk
 
         if not mutable_data.get("unit") and mutable_data.get("uom"):
-            unit = UnitMaster.objects.filter(unit_name=mutable_data["uom"]).first()
+            unit = (
+                UnitMaster.objects.using(_masters_db_alias())
+                .filter(unit_name=mutable_data["uom"])
+                .first()
+            )
             if unit is None:
                 raise serializers.ValidationError(
                     {"uom": "Matching unit was not found in MASTERS."}
@@ -572,7 +543,7 @@ class PurchaseExpenseSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseExpense
         fields = "__all__"
-        read_only_fields = ["id", "expense_number", "created_at", "supplier_name", "project_name", "category_name", "sub_category_name"]
+        read_only_fields = ["id", "created_at", "supplier_name", "project_name", "category_name", "sub_category_name"]
 
     def get_supplier_name(self, obj):
         if obj.supplier_manual_entry and obj.manual_supplier_name:

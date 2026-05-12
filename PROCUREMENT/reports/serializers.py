@@ -18,6 +18,15 @@ class PendingPRReportSerializer(serializers.Serializer):
 
     item_code = serializers.CharField()
     item_name = serializers.CharField()
+    qty = serializers.FloatField()
+    uom = serializers.CharField(allow_blank=True)
+    pending_qty = serializers.FloatField()
+    remarks = serializers.CharField(allow_blank=True)
+    prepared_by = serializers.CharField(allow_blank=True)
+    prepared_date = serializers.DateTimeField(allow_null=True)
+    authorized_by = serializers.CharField(allow_blank=True)
+    authorized_date = serializers.DateTimeField(allow_null=True)
+    authorized_status = serializers.CharField(allow_blank=True)
 
 # Complete PR
 class CompletePRReportSerializer(serializers.Serializer):
@@ -38,6 +47,22 @@ class CompletePRReportSerializer(serializers.Serializer):
 
     item_code = serializers.CharField()
     item_name = serializers.CharField()
+    qty = serializers.FloatField()
+    uom = serializers.CharField(allow_blank=True)
+    po_no = serializers.CharField(allow_blank=True)
+    po_status = serializers.CharField(allow_blank=True)
+    l1_action_by_date = serializers.CharField(allow_blank=True)
+    l2_action_by_date = serializers.CharField(allow_blank=True)
+    l3_action_by_date = serializers.CharField(allow_blank=True)
+    po_qty = serializers.FloatField()
+    vendor_name = serializers.CharField(allow_blank=True)
+    grn_srn_number = serializers.CharField(allow_blank=True)
+    grn_srn_date = serializers.CharField(allow_blank=True)
+    prepared_by = serializers.CharField(allow_blank=True)
+    prepared_date = serializers.DateTimeField(allow_null=True)
+    authorized_by = serializers.CharField(allow_blank=True)
+    authorized_date = serializers.DateTimeField(allow_null=True)
+    authorized_status = serializers.CharField(allow_blank=True)
 
 # PO Report
 class POReportSerializer(serializers.Serializer):
@@ -59,6 +84,16 @@ class POReportSerializer(serializers.Serializer):
     basic_value = serializers.FloatField()
     discount = serializers.FloatField()
     total_value = serializers.FloatField()
+    ref_so_no = serializers.CharField(allow_blank=True, allow_null=True)
+    linked_pr_no = serializers.CharField(allow_blank=True, allow_null=True)
+    quotation_no = serializers.CharField(allow_blank=True, allow_null=True)
+    prepared_by = serializers.CharField(allow_blank=True, allow_null=True)
+    prepared_date = serializers.DateTimeField(allow_null=True)
+    authorized_by = serializers.CharField(allow_blank=True, allow_null=True)
+    authorized_date = serializers.DateTimeField(allow_null=True)
+    grn_srn_number = serializers.CharField(allow_blank=True, allow_null=True)
+    grn_srn_date = serializers.CharField(allow_blank=True, allow_null=True)
+    status = serializers.CharField(allow_blank=True, allow_null=True)
 
 
 # Pending GRN
@@ -80,6 +115,12 @@ class PendingGRNReportSerializer(serializers.Serializer):
     po_qty = serializers.FloatField()
     received_qty = serializers.FloatField()
     pending_qty = serializers.FloatField()
+    uom = serializers.CharField(allow_blank=True)
+    rate = serializers.FloatField()
+    total_value = serializers.FloatField()
+    grn_no = serializers.CharField(allow_blank=True)
+    grn_date = serializers.CharField(allow_blank=True)
+    status = serializers.CharField(allow_blank=True)
 
 
 # Complete GRN
@@ -111,6 +152,10 @@ class CompleteGRNReportSerializer(serializers.Serializer):
     uom = serializers.CharField()
     rate = serializers.FloatField()
     total_value = serializers.FloatField()
+    prepared_by_dt = serializers.CharField(allow_blank=True)
+    checked_by = serializers.CharField(allow_blank=True)
+    authorized_by_dt = serializers.CharField(allow_blank=True)
+    status = serializers.CharField(allow_blank=True)
 
 
 # Pending SRN
@@ -132,6 +177,12 @@ class PendingSRNReportSerializer(serializers.Serializer):
     po_qty = serializers.FloatField()
     received_qty = serializers.FloatField()
     pending_qty = serializers.FloatField()
+    uom = serializers.CharField(allow_blank=True)
+    rate = serializers.FloatField()
+    amount = serializers.FloatField()
+    srn_no = serializers.CharField(allow_blank=True)
+    srn_date = serializers.CharField(allow_blank=True)
+    status = serializers.CharField(allow_blank=True)
 
 # Complete SRN
 class CompleteSRNReportSerializer(serializers.Serializer):
@@ -151,3 +202,16 @@ class CompleteSRNReportSerializer(serializers.Serializer):
     eway_bill_no = serializers.CharField(allow_blank=True, allow_null=True)
     transport_details = serializers.CharField(allow_blank=True, allow_null=True)
     po_no = serializers.CharField(allow_blank=True, allow_null=True)
+    item_code = serializers.CharField()
+    item_name = serializers.CharField()
+    po_qty = serializers.FloatField()
+    accepted_qty = serializers.FloatField()
+    rejected_qty = serializers.FloatField()
+    pending_qty = serializers.FloatField()
+    uom = serializers.CharField(allow_blank=True)
+    rate = serializers.FloatField()
+    total_value = serializers.FloatField()
+    prepared_by_dt = serializers.CharField(allow_blank=True)
+    checked_by = serializers.CharField(allow_blank=True)
+    authorized_by_dt = serializers.CharField(allow_blank=True)
+    status = serializers.CharField(allow_blank=True)

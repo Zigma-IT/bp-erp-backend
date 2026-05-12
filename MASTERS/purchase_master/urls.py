@@ -74,6 +74,7 @@ category_patterns = [
 item_patterns = [
     path('items/', views.item_list, name='item-list'),
     path('items/create/', views.create_item, name='item-create'),
+    path('items/<int:pk>/', views.update_item, name='item-update'),
     path('items/<int:pk>/toggle/', views.toggle_item, name='item-toggle'),
     path('items/group-dropdown/', views.group_dropdown, name='item-group-dropdown'),
     path('items/sub-group-dropdown/', views.sub_group_dropdown, name='item-sub-group-dropdown'),
@@ -102,7 +103,7 @@ bom_patterns = [
 ]
 
 # Combine all patterns
-urlpatterns = [path("", include(router.urls))] + [
+urlpatterns = [
     *unit_patterns,
     *item_group_patterns,
     *sub_group_patterns,

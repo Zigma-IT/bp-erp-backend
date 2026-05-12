@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from corsheaders.defaults import default_headers
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,11 +20,23 @@ ALLOWED_HOSTS = ["0.0.0.0", "localhost", "127.0.0.1"]
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5175",
 ]
+
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_HEADERS = list(default_headers)
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5175",
 ]
 
 
@@ -84,6 +97,20 @@ WSGI_APPLICATION = 'MASTERS.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASES = {
+       'masters_db': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'masters_db',
+        'USER': 'root',
+        'PASSWORD': 'admin@123',
+        'HOST': '127.0.0.1',
+        'PORT': '3306',
+        'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            'charset': 'utf8mb4',
+            'use_unicode': True,
+        }
+    },
+
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'masters_db',
@@ -96,8 +123,15 @@ DATABASES = {
             'charset': 'utf8mb4',
             'use_unicode': True,
         }
-    }
+    },
 }
+
+# Keep the historical masters_db alias available even when masters now points
+# at the default/shared database. Some code paths still reference this alias.
+if 'masters_db' not in DATABASES:
+    DATABASES['masters_db'] = DATABASES['default'].copy()
+    if 'OPTIONS' in DATABASES['default']:
+        DATABASES['masters_db']['OPTIONS'] = DATABASES['default']['OPTIONS'].copy()
 
 
 
@@ -138,3 +172,5 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

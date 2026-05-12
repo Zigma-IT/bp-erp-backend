@@ -28,3 +28,42 @@ def ensure_dev_common_master_data() -> None:
             name=city_type,
             defaults={"is_active": True},
         )
+
+    for application_type in [
+        "Web Application",
+        "Mobile Application",
+        "Desktop Application",
+    ]:
+        CommonMaster.objects.get_or_create(
+            type="APPLICATION_TYPE",
+            name=application_type,
+            defaults={"is_active": True},
+        )
+
+    for document_type in [
+        "PAN",
+        "GST",
+        "Aadhar",
+        "Passport",
+        "License",
+        "Bank Verification Certificate",
+    ]:
+        CommonMaster.objects.get_or_create(
+            type="DOCUMENT_TYPE",
+            name=document_type,
+            defaults={"is_active": True},
+        )
+
+    for supplier_group in ["Manufacturer", "Dealer", "Service Provider"]:
+        CommonMaster.objects.get_or_create(
+            type="SUPPLIER_GROUP",
+            name=supplier_group,
+            defaults={"is_active": True},
+        )
+
+    for msme_type in ["Micro", "Small", "Medium"]:
+        CommonMaster.objects.get_or_create(
+            type="MSME_TYPE",
+            name=msme_type,
+            defaults={"is_active": True},
+        )

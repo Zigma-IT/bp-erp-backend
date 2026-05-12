@@ -99,6 +99,17 @@ RECEIPT_APPROVAL_FILTER_PARAMETERS = [
 ]
 
 
+def _request_user_or_none(request):
+    user = getattr(request, "user", None)
+    if user is not None and getattr(user, "is_authenticated", False):
+        return user
+    return None
+
+
+def _approval_remarks(request):
+    return request.data.get("remarks") or request.data.get("approval_notes") or ""
+
+
 @extend_schema_view(
     list=extend_schema(
         parameters=[query_str_parameter("status", "Filter by level 1 approval status.")],
@@ -501,8 +512,9 @@ class GRNApprovalLevel1ViewSet(viewsets.ModelViewSet):
         grn = self.get_object()
 
         grn.level1_status = 'approved'
-        grn.level1_approved_by = request.user
+        grn.level1_approved_by = _request_user_or_none(request)
         grn.level1_approved_at = timezone.now()
+        grn.level1_remarks = _approval_remarks(request)
         grn.status = 'pending'
         grn.save()
 
@@ -513,8 +525,8 @@ class GRNApprovalLevel1ViewSet(viewsets.ModelViewSet):
         grn = self.get_object()
 
         grn.level1_status = 'rejected'
-        grn.level1_remarks = request.data.get('remarks')
-        grn.level1_approved_by = request.user
+        grn.level1_remarks = _approval_remarks(request)
+        grn.level1_approved_by = _request_user_or_none(request)
         grn.level1_approved_at = timezone.now()
         grn.status = 'rejected'
         grn.save()
@@ -561,8 +573,9 @@ class GRNApprovalLevel2ViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Level 1 approval pending'}, status=400)
 
         grn.level2_status = 'approved'
-        grn.level2_checked_by = request.user
+        grn.level2_checked_by = _request_user_or_none(request)
         grn.level2_checked_at = timezone.now()
+        grn.level2_remarks = _approval_remarks(request)
         grn.status = 'checked'
         grn.save()
 
@@ -576,8 +589,8 @@ class GRNApprovalLevel2ViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Level 1 approval pending'}, status=400)
 
         grn.level2_status = 'rejected'
-        grn.level2_remarks = request.data.get('remarks')
-        grn.level2_checked_by = request.user
+        grn.level2_remarks = _approval_remarks(request)
+        grn.level2_checked_by = _request_user_or_none(request)
         grn.level2_checked_at = timezone.now()
         grn.status = 'rejected'
         grn.save()
@@ -786,7 +799,7 @@ def _approval_queryset(request):
         queryset = queryset.filter(
             Q(so_number__icontains=search_value)
             | Q(company__name__icontains=search_value)
-            | Q(customer__name__icontains=search_value)
+            | Q(customer__customer_name__icontains=search_value)
             | Q(so_type__icontains=search_value)
             | Q(active_status__icontains=search_value)
             | Q(status__icontains=search_value)
@@ -811,7 +824,7 @@ def sales_order_approval_list(request):
         "active_status",
         "status",
         company_name=F("company__name"),
-        customer_name=F("customer__name"),
+        customer_name=F("customer__customer_name"),
     )
 
     data = []
@@ -895,7 +908,7 @@ def _sales_invoice_approval_queryset(request):
         queryset = queryset.filter(
             Q(invoice_number__icontains=search_value)
             | Q(company__name__icontains=search_value)
-            | Q(customer__name__icontains=search_value)
+            | Q(customer__customer_name__icontains=search_value)
             | Q(status__icontains=search_value)
         )
 
@@ -922,7 +935,7 @@ def sales_invoice_approval_list(request):
                 "invoice_date": invoice.invoice_date,
                 "invoice_number": invoice.invoice_number,
                 "company_name": invoice.company.name,
-                "customer_name": invoice.customer.name,
+                "customer_name": invoice.customer.customer_name,
                 "amount": str(total_amount),
                 "approve_status": invoice.status,
             }
@@ -1083,6 +1096,7 @@ class PRApprovalLevel2ViewSet(viewsets.ModelViewSet):
         pr.level2_status = 'approved'
         pr.level2_approved_by = request.user
         pr.level2_approved_at = timezone.now()
+        pr.status = 'approved'
         pr.save()
 
         return Response({'message': 'Level 2 Approved'})
@@ -1102,6 +1116,7 @@ class PRApprovalLevel2ViewSet(viewsets.ModelViewSet):
         pr.level2_remarks = request.data.get('remarks')
         pr.level2_approved_by = request.user
         pr.level2_approved_at = timezone.now()
+        pr.status = 'rejected'
         pr.save()
 
         return Response({'message': 'Level 2 Rejected'})
@@ -1125,8 +1140,10 @@ class GRNApprovalLevel1ViewSet(viewsets.ModelViewSet):
         grn = self.get_object()
 
         grn.level1_status = 'approved'
-        grn.level1_approved_by = request.user
+        grn.level1_approved_by = _request_user_or_none(request)
         grn.level1_approved_at = timezone.now()
+        grn.level1_remarks = _approval_remarks(request)
+        grn.status = 'pending'
         grn.save()
 
         return Response({'message': 'GRN Level 1 Approved'})
@@ -1136,9 +1153,10 @@ class GRNApprovalLevel1ViewSet(viewsets.ModelViewSet):
         grn = self.get_object()
 
         grn.level1_status = 'rejected'
-        grn.level1_remarks = request.data.get('remarks')
-        grn.level1_approved_by = request.user
+        grn.level1_remarks = _approval_remarks(request)
+        grn.level1_approved_by = _request_user_or_none(request)
         grn.level1_approved_at = timezone.now()
+        grn.status = 'rejected'
         grn.save()
 
         return Response({'message': 'GRN Level 1 Rejected'})
@@ -1169,8 +1187,10 @@ class GRNApprovalLevel2ViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Level 1 approval pending'}, status=400)
 
         grn.level2_status = 'approved'
-        grn.level2_checked_by = request.user
+        grn.level2_checked_by = _request_user_or_none(request)
         grn.level2_checked_at = timezone.now()
+        grn.level2_remarks = _approval_remarks(request)
+        grn.status = 'checked'
         grn.save()
 
         return Response({'message': 'GRN Level 2 Approved'})
@@ -1183,9 +1203,10 @@ class GRNApprovalLevel2ViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Level 1 approval pending'}, status=400)
 
         grn.level2_status = 'rejected'
-        grn.level2_remarks = request.data.get('remarks')
-        grn.level2_checked_by = request.user
+        grn.level2_remarks = _approval_remarks(request)
+        grn.level2_checked_by = _request_user_or_none(request)
         grn.level2_checked_at = timezone.now()
+        grn.status = 'rejected'
         grn.save()
 
         return Response({'message': 'GRN Level 2 Rejected'})

@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.db import connections
 from django.shortcuts import get_object_or_404
 from django.db.models import F, Sum
 from drf_spectacular.utils import extend_schema, inline_serializer
@@ -22,9 +23,24 @@ from .serializers import (
     SalesInvoiceSerializer,
 )
 from purchase_master.models import ItemGroup, ProductCreation as ProductMaster, SubGroup, UnitMaster
-from common_master.models import Company as CompanyMaster, Project as ProjectMaster, Tax as TaxMaster
+from common_master.models import Company as CompanyMaster, Project as ProjectMaster, Tax as TaxMaster, CustomerProfile as CustomerMaster
 from purchase_entrys.models import Supplier
 from .models import PurchaseExpense
+
+
+def _masters_db_alias():
+    return "masters_db" if "masters_db" in connections.databases else "default"
+
+
+def _customer_name_map(customer_ids):
+    if not customer_ids:
+        return {}
+
+    queryset = CustomerMaster.objects.using(_masters_db_alias()).filter(
+        pk__in=customer_ids,
+        is_delete=False,
+    )
+    return {customer.pk: customer.customer_name for customer in queryset}
 
 
 SALES_ORDER_FILTER_PARAMETERS = [
@@ -42,7 +58,7 @@ SALES_ORDER_LIST_RESPONSE = inline_serializer(
 
 
 def _sales_order_queryset(request):
-    queryset = SalesOrder.objects.select_related("company", "customer").order_by(
+    queryset = SalesOrder.objects.select_related("company").order_by(
         "-entry_date",
         "-id",
     )
@@ -90,15 +106,18 @@ def sales_order_list(request):
             return Response(response_serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    data = _sales_order_queryset(request).values(
+    data = list(_sales_order_queryset(request).values(
         "id",
         "entry_date",
         "so_number",
         "so_type",
         "active_status",
         "status",
+        "customer_id",
         company_name=F("company__name"),
-        customer_name=F("customer__name"),
+    ))
+    customer_names = _customer_name_map(
+        {row["customer_id"] for row in data if row["customer_id"]}
     )
 
     result = []
@@ -110,7 +129,7 @@ def sales_order_list(request):
                 "entry_date": row["entry_date"],
                 "sales_order_no": row["so_number"],
                 "company_name": row["company_name"],
-                "customer_name": row["customer_name"],
+                "customer_name": customer_names.get(row["customer_id"], ""),
                 "so_type": row["so_type"],
                 "active_status": row["active_status"],
                 "approve_status": row["status"],
@@ -145,7 +164,7 @@ def sales_order_list(request):
 @api_view(["GET", "PUT", "PATCH", "DELETE"])
 def sales_order_detail(request, pk):
     sales_order = get_object_or_404(
-        SalesOrder.objects.select_related("company", "customer"),
+        SalesOrder.objects.select_related("company"),
         pk=pk,
     )
 
@@ -201,7 +220,7 @@ PURCHASE_EXPENSE_LIST_RESPONSE = inline_serializer(
 
 
 def _sales_invoice_queryset(request):
-    queryset = SalesInvoice.objects.select_related("company", "customer").order_by(
+    queryset = SalesInvoice.objects.select_related("company").order_by(
         "-invoice_date",
         "-id",
     )
@@ -285,13 +304,16 @@ def sales_invoice_list(request):
             return Response(response_serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    data = _sales_invoice_queryset(request).values(
+    data = list(_sales_invoice_queryset(request).values(
         "id",
         "invoice_date",
         "invoice_number",
         "status",
+        "customer_id",
         company_name=F("company__name"),
-        customer_name=F("customer__name"),
+    ))
+    customer_names = _customer_name_map(
+        {row["customer_id"] for row in data if row["customer_id"]}
     )
 
     result = []
@@ -309,7 +331,7 @@ def sales_invoice_list(request):
                 "invoice_date": row["invoice_date"],
                 "invoice_number": row["invoice_number"],
                 "company_name": row["company_name"],
-                "customer_name": row["customer_name"],
+                "customer_name": customer_names.get(row["customer_id"], ""),
                 "amount": str(amount),
                 "approve_status": row["status"],
             }
@@ -343,7 +365,7 @@ def sales_invoice_list(request):
 @api_view(["GET", "PUT", "PATCH", "DELETE"])
 def sales_invoice_detail(request, pk):
     sales_invoice = get_object_or_404(
-        SalesInvoice.objects.select_related("company", "customer").prefetch_related(
+        SalesInvoice.objects.select_related("company").prefetch_related(
             "items__product",
             "items__unit",
         ),
@@ -503,7 +525,12 @@ def companies_dropdown(request):
 @api_view(["GET"])
 def customers_dropdown(request):
     """Dropdown list of customers"""
-    customers = Customer.objects.all().values_list("id", "name").order_by("name")
+    customers = (
+        CustomerMaster.objects.using(_masters_db_alias())
+        .filter(is_delete=False, is_active=True)
+        .values_list("id", "customer_name")
+        .order_by("customer_name")
+    )
     results = [{"id": customer[0], "name": customer[1]} for customer in customers]
     return Response({"results": results})
 

@@ -16,12 +16,16 @@ class UniqueIDMixin(models.Model):
 
 
 class UnitMaster(UniqueIDMixin):
-    unit_name = models.CharField(max_length=50, unique=True)
+    unit_name = models.CharField(max_length=50)
     decimal_points = models.IntegerField(default=0)
     description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "purchase_master_unitmaster"
+        ordering = ["-id"]
 
     def __str__(self):
         return self.unit_name

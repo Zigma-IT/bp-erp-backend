@@ -8,7 +8,9 @@ from django.db import models
 from django.utils import timezone
 from common_master.models import Company as CompanyMaster
 from common_master.models import Project as ProjectMaster
+from common_master.models import SupplierProfile as SupplierMaster
 from common_master.models import Tax as TaxMaster
+from purchase_master.models import ItemMaster
 
 class UniqueIDMixin(models.Model):
     unique_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
@@ -37,6 +39,24 @@ class RateOrder(UniqueIDMixin):
 
     def __str__(self):
         return f"RateOrder-{self.pk}"
+
+
+class RateOrderDocument(UniqueIDMixin):
+    rate_order = models.ForeignKey(
+        RateOrder,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+    document_type = models.CharField(max_length=100)
+    document_name = models.CharField(max_length=255, blank=True)
+    file = models.FileField(upload_to="procurement/rate-orders/documents/")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta(UniqueIDMixin.Meta):
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return self.document_name or self.file.name
 
 
 class Supplier(UniqueIDMixin):
@@ -293,6 +313,24 @@ class PurchaseOrder(UniqueIDMixin):
         super().save(*args, **kwargs)
 
 
+class PurchaseOrderDocument(UniqueIDMixin):
+    purchase_order = models.ForeignKey(
+        PurchaseOrder,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+    document_type = models.CharField(max_length=100)
+    document_name = models.CharField(max_length=255, blank=True)
+    file = models.FileField(upload_to="procurement/purchase-orders/documents/")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta(UniqueIDMixin.Meta):
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return self.document_name or self.file.name
+
+
 class PurchaseOrderApproval(UniqueIDMixin):
     class Level(models.IntegerChoices):
         LEVEL_1 = 1, "Level 1"
@@ -444,6 +482,24 @@ class PurchaseRequisition(UniqueIDMixin):
         if not self.pr_number and company and company.pk is not None:
             self.pr_number = self.generate_pr_number()
         super().save(*args, **kwargs)
+
+
+class PurchaseRequisitionDocument(UniqueIDMixin):
+    purchase_requisition = models.ForeignKey(
+        PurchaseRequisition,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+    document_type = models.CharField(max_length=100)
+    document_name = models.CharField(max_length=255, blank=True)
+    file = models.FileField(upload_to="procurement/purchase-requisitions/documents/")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta(UniqueIDMixin.Meta):
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return self.document_name or self.file.name
 
 
 class GRN(UniqueIDMixin):

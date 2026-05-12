@@ -1,8 +1,11 @@
 # Units - This file defines the API views for managing units in the purchase_master module of the MASTERS app, including a viewset for CRUD operations on UnitMaster model instances and path-based views for listing units with pagination and search functionality, creating new units, updating existing units, and toggling unit status. The UnitViewSet class provides methods for handling create, update, and delete operations, while the path-based views allow for more customized handling of unit-related API requests, including soft deletion by deactivating units instead of permanently removing them from the database.
+import uuid
+
 from typing import Any, cast
 
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
+from django.db import connections
 from django.db.models import Q
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
@@ -27,7 +30,7 @@ from .models import (
 from .serializers import CreateBOMSerializer, StandardBOMSerializer, UnitSerializer
 
 class UnitViewSet(viewsets.ModelViewSet):
-    queryset = UnitMaster.objects.all().order_by('-id')
+    queryset = UnitMaster.objects.all().order_by('-pk')
     serializer_class = UnitSerializer
 
     def create(self, request, *args, **kwargs):
@@ -54,7 +57,7 @@ def unit_list(request):
     length = int(request.GET.get('length', 10))
     search = request.GET.get('search[value]', '')
 
-    queryset = UnitMaster.objects.all().order_by('-id')
+    queryset = UnitMaster.objects.all().order_by('-pk')
 
     total = queryset.count()
 
@@ -73,6 +76,7 @@ def unit_list(request):
     for i, item in enumerate(serializer.data, start=1):
         data.append({
             "sno": start + i,
+            "unique_id": item["unique_id"],
             "unit_name": item["unit_name"],
             "decimal_points": item["decimal_points"],
             "description": item["description"] or "-",
@@ -136,13 +140,12 @@ def toggle_unit(request, pk):
 @api_view(['GET'])
 def item_group_list(request):
     search = request.GET.get('search', '')
-
-    queryset = ItemGroup.objects.all()
+    queryset = ItemGroup.objects.all().order_by("-id")
 
     if search:
         queryset = queryset.filter(group_name__icontains=search)
 
-    data = list(queryset.values())
+    data = list(queryset.values("id", "group_name", "code", "description", "is_active"))
 
     return Response({
         "status": True,
@@ -246,8 +249,7 @@ def toggle_item_group(request, pk):
 def sub_group_list(request):
     search = request.GET.get('search', '')
     group_id = request.GET.get('group_id')
-
-    queryset = SubGroup.objects.select_related('group').all()
+    queryset = SubGroup.objects.select_related("group").all().order_by("-id")
 
     if group_id:
         queryset = queryset.filter(group_id=group_id)
@@ -255,18 +257,19 @@ def sub_group_list(request):
     if search:
         queryset = queryset.filter(sub_group_name__icontains=search)
 
-    data = []
-    for obj in queryset:
-        data.append({
+    data = [
+        {
             "id": obj.pk,
             "sub_group_name": obj.sub_group_name,
             "sub_group_code": obj.sub_group_code,
             "group_name": obj.group.group_name,
             "group_code": obj.group.code,
-            "group_id": obj.group.pk,
+            "group_id": obj.group_id,
             "description": obj.description,
-            "is_active": obj.is_active
-        })
+            "is_active": obj.is_active,
+        }
+        for obj in queryset
+    ]
 
     return Response({
         "status": True,
@@ -308,7 +311,7 @@ def create_sub_group(request):
         sub_group_name=name,
         sub_group_code=code,
         description=description,
-        is_active=is_active
+        is_active=is_active,
     )
 
     return Response({
@@ -320,11 +323,6 @@ def create_sub_group(request):
 # UPDATE
 @api_view(['PUT'])
 def update_sub_group(request, pk):
-    try:
-        obj = SubGroup.objects.get(id=pk)
-    except SubGroup.DoesNotExist:
-        return Response({"status": False, "message": "Sub group not found"}, status=404)
-
     group_id = request.data.get('group_id')
     name = request.data.get('sub_group_name')
     code = request.data.get('sub_group_code')
@@ -339,6 +337,11 @@ def update_sub_group(request, pk):
 
     if not code:
         return Response({"status": False, "message": "Sub group code is required"}, status=400)
+
+    try:
+        obj = SubGroup.objects.get(id=pk)
+    except SubGroup.DoesNotExist:
+        return Response({"status": False, "message": "Sub group not found"}, status=404)
 
     try:
         group = ItemGroup.objects.get(id=group_id)
@@ -385,11 +388,15 @@ def toggle_sub_group(request, pk):
 # DROPDOWN (for create page)
 @api_view(['GET'])
 def sub_group_group_dropdown(request):
-    groups = ItemGroup.objects.filter(is_active=True).values('id', 'group_name', 'code')
+    groups = list(
+        ItemGroup.objects.filter(is_active=True)
+        .order_by("group_name")
+        .values("id", "group_name", "code")
+    )
 
     return Response({
         "status": True,
-        "data": list(groups)
+        "data": groups
     })
 # Item_category's - This file defines the API views for managing item categories in the purchase_master module of the MASTERS app, including path-based views for listing item categories with pagination and search functionality, creating new item categories, updating existing item categories, and toggling item category status. The views handle HTTP requests and return appropriate responses based on the operations performed on the Category model, allowing for organized management of item category data within the system. Additionally, there are views for retrieving dropdown data for groups and sub groups to facilitate category creation and updates.
 # LIST
@@ -764,6 +771,56 @@ def create_item(request):
         "message": "Item created successfully",
         "item_code": item_code
     })
+
+
+# UPDATE
+@api_view(['PUT'])
+def update_item(request, pk):
+    try:
+        obj = ItemMaster.objects.get(id=pk)
+    except ItemMaster.DoesNotExist:
+        return Response({"status": False, "message": "Item not found"}, status=404)
+
+    group_id = request.data.get('group_id')
+    sub_group_id = request.data.get('sub_group_id')
+    category_id = request.data.get('category_id')
+    unit_id = request.data.get('unit_id')
+    item_name = request.data.get('item_name')
+
+    if not all([group_id, sub_group_id, category_id, item_name]):
+        return Response({"status": False, "message": "Required fields missing"}, status=400)
+
+    try:
+        group = ItemGroup.objects.get(id=group_id)
+        sub_group = SubGroup.objects.get(id=sub_group_id, group=group)
+        category = Category.objects.get(id=category_id, sub_group=sub_group)
+        unit = UnitMaster.objects.get(id=unit_id) if unit_id else None
+    except ItemGroup.DoesNotExist:
+        return Response({"status": False, "message": "Item group not found"}, status=404)
+    except SubGroup.DoesNotExist:
+        return Response({"status": False, "message": "Item sub-group not found"}, status=404)
+    except Category.DoesNotExist:
+        return Response({"status": False, "message": "Category not found"}, status=404)
+    except UnitMaster.DoesNotExist:
+        return Response({"status": False, "message": "Unit not found"}, status=404)
+
+    obj.group = group
+    obj.sub_group = sub_group
+    obj.category = category
+    obj.unit = unit
+    obj.item_name = item_name
+    obj.reorder_level = request.data.get('reorder_level', obj.reorder_level)
+    obj.reorder_qty = request.data.get('reorder_qty', obj.reorder_qty)
+    obj.purchase_lead_time = request.data.get('purchase_lead_time', obj.purchase_lead_time)
+    obj.unit_price = request.data.get('unit_price', obj.unit_price)
+    obj.hsn_code = request.data.get('hsn_code', obj.hsn_code)
+    obj.tolerance = request.data.get('tolerance', obj.tolerance)
+    obj.tax = request.data.get('tax', obj.tax)
+    obj.description = request.data.get('description', obj.description)
+    obj.is_active = request.data.get('is_active', obj.is_active)
+    obj.save()
+
+    return Response({"status": True, "message": "Item updated successfully"})
 
 
 # TOGGLE

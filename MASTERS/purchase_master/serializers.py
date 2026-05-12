@@ -3,6 +3,8 @@ from rest_framework import serializers
 from .models import ItemGroup, ItemMaster, ProductCreation, StandardBOM, StandardBOMItem, UnitMaster
 
 class UnitSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(source="pk", read_only=True)
+
     class Meta:
         model = UnitMaster
         fields = '__all__'
@@ -77,5 +79,4 @@ class CreateBOMSerializer(serializers.Serializer):
                 raise serializers.ValidationError(f"Item {idx}: Item with ID {item['item_id']} not found")
         
         return value
-
 

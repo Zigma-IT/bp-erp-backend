@@ -58,6 +58,16 @@ purchase_order_patterns = [
         "purchase-orders/create/", views.create_purchase_order,name="purchase-order-create",),
     path(
         "purchase-orders/<int:pk>/",views.purchase_order_detail,name="purchase-order-detail",),
+    path(
+        "purchase-orders/<int:pk>/documents/",
+        views.purchase_order_documents,
+        name="purchase-order-documents",
+    ),
+    path(
+        "purchase-orders/<int:pk>/documents/<int:document_id>/",
+        views.delete_purchase_order_document,
+        name="purchase-order-document-delete",
+    ),
 ]
 
 purchase_requisition_patterns = [
@@ -67,6 +77,16 @@ purchase_requisition_patterns = [
         "purchase-requisitions/create/", views.create_purchase_requisition,name="purchase-requisition-create",),
     path(
         "purchase-requisitions/<int:pk>/",views.purchase_requisition_detail,name="purchase-requisition-detail",),
+    path(
+        "purchase-requisitions/<int:pk>/documents/",
+        views.purchase_requisition_documents,
+        name="purchase-requisition-documents",
+    ),
+    path(
+        "purchase-requisitions/<int:pk>/documents/<int:document_id>/",
+        views.delete_purchase_requisition_document,
+        name="purchase-requisition-document-delete",
+    ),
 ]
 
 # Approval list and action APIs.
