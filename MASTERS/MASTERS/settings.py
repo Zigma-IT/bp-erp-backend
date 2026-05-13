@@ -57,6 +57,8 @@ INSTALLED_APPS = [
     'common_master.apps.CommonMasterConfig',
     'purchase_master.apps.PurchaseMasterConfig',
     'drf_spectacular',
+        'hr_master.apps.HrMasterConfig',
+
 ]
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',

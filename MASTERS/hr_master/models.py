@@ -1,0 +1,608 @@
+import uuid
+from django.db import models
+
+
+class DepartmentCreation(models.Model):
+    unique_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+
+    department = models.CharField(max_length=255)
+
+    department_head = models.CharField(max_length=255)
+
+    STATUS_CHOICES = (
+        ('Active', 'Active'),
+        ('Inactive', 'Inactive'),
+    )
+
+    active_status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='Active'
+    )
+
+    is_active = models.BooleanField(default=True)
+    is_delete = models.BooleanField(default=False)
+
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "department_creation"
+        ordering = ['-id']
+
+    def __str__(self):
+        return self.department
+
+
+
+class DesignationCreation(models.Model):
+
+    unique_id = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        unique=True
+    )
+
+    grade_type = models.CharField(max_length=255)
+
+    designation = models.CharField(max_length=255)
+
+    is_active = models.BooleanField(default=True)
+
+    is_delete = models.BooleanField(default=False)
+
+    created = models.DateTimeField(auto_now_add=True)
+
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "designation_creation"
+        ordering = ['-id']
+
+    def __str__(self):
+        return self.designation
+
+
+class StaffCreation(models.Model):
+
+    staff_id = models.AutoField(primary_key=True)
+
+    unique_id = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        unique=True
+    )
+
+    # PERSONAL DETAILS
+    staff_name = models.CharField(max_length=255)
+    father_name = models.CharField(max_length=255, null=True, blank=True)
+    employee_id = models.CharField(max_length=255, null=True, blank=True)
+
+    premises_type = models.CharField(max_length=255, null=True, blank=True)
+
+    branch_id = models.CharField(max_length=255, null=True, blank=True)
+
+    attendance_setting_id = models.CharField(max_length=255, null=True, blank=True)
+
+    doc_dob = models.DateField(null=True, blank=True)
+
+    date_of_birth = models.DateField(null=True, blank=True)
+
+    personal_contact_no = models.CharField(max_length=20)
+
+    age = models.IntegerField(null=True, blank=True)
+
+    qualification = models.CharField(max_length=255, null=True, blank=True)
+
+    graduation_type = models.CharField(max_length=255, null=True, blank=True)
+
+    gender = models.CharField(max_length=50)
+
+    martial_status = models.CharField(max_length=50, null=True, blank=True)
+
+    office_contact_no = models.CharField(max_length=20, null=True, blank=True)
+
+    personal_email_id = models.EmailField(null=True, blank=True)
+
+    office_email_id = models.EmailField(null=True, blank=True)
+
+    blood_group = models.CharField(max_length=20, null=True, blank=True)
+
+    aadhar_no = models.CharField(max_length=30, null=True, blank=True)
+
+    license_no = models.CharField(max_length=255, null=True, blank=True)
+
+    pan_no = models.CharField(max_length=30, null=True, blank=True)
+
+    gst_no = models.CharField(max_length=50, null=True, blank=True)
+
+    claim_status = models.CharField(max_length=50, null=True, blank=True)
+
+    # PRESENT ADDRESS
+    pre_country = models.CharField(max_length=255, null=True, blank=True)
+    pre_state = models.CharField(max_length=255, null=True, blank=True)
+    pre_city = models.CharField(max_length=255, null=True, blank=True)
+    pre_building_no = models.CharField(max_length=255, null=True, blank=True)
+    pre_street = models.CharField(max_length=255, null=True, blank=True)
+    pre_area = models.CharField(max_length=255, null=True, blank=True)
+    pre_pincode = models.CharField(max_length=20, null=True, blank=True)
+
+    # PERMANENT ADDRESS
+    same_address_status = models.BooleanField(default=False)
+
+    perm_country = models.CharField(max_length=255, null=True, blank=True)
+    perm_state = models.CharField(max_length=255, null=True, blank=True)
+    perm_city = models.CharField(max_length=255, null=True, blank=True)
+    perm_building_no = models.CharField(max_length=255, null=True, blank=True)
+    perm_street = models.CharField(max_length=255, null=True, blank=True)
+    perm_area = models.CharField(max_length=255, null=True, blank=True)
+    perm_pincode = models.CharField(max_length=20, null=True, blank=True)
+
+    # OFFICE DETAILS
+    date_of_join = models.DateField(null=True, blank=True)
+
+    grade = models.CharField(max_length=255, null=True, blank=True)
+
+    designation_unique_id = models.CharField(max_length=255, null=True, blank=True)
+
+    work_location = models.CharField(max_length=255, null=True, blank=True)
+
+    department = models.CharField(max_length=255, null=True, blank=True)
+
+    biometric_id = models.CharField(max_length=255, null=True, blank=True)
+
+    salary_category = models.CharField(max_length=255, null=True, blank=True)
+
+    reporting_officer = models.CharField(max_length=255, null=True, blank=True)
+
+    esi_no = models.CharField(max_length=255, null=True, blank=True)
+
+    pf_no = models.CharField(max_length=255, null=True, blank=True)
+
+    company_name = models.CharField(max_length=255, null=True, blank=True)
+
+    # SALARY DETAILS
+    salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    annum_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    basic_wages = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    annum_basic_wages = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    hra = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    annum_hra = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    conveyance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    annum_conveyance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    medical_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    annum_medical_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    education_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    annum_education_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    other_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    annum_other_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    pf = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    annum_pf = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    esi = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    annum_esi = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    total_deduction = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    annum_total_deduction = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    net_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    annum_net_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    purformance_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    annum_purformance_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    ctc = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    annum_ctc = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    # STATUS
+    status = models.CharField(max_length=100, default="Active")
+
+    relieve_date = models.DateField(null=True, blank=True)
+
+    relieve_status = models.CharField(max_length=100, null=True, blank=True)
+
+    relieve_reason = models.TextField(null=True, blank=True)
+
+    # FILE
+    file_name = models.FileField(
+        upload_to='staff_files/',
+        null=True,
+        blank=True
+    )
+
+    file_original_name = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    is_delete = models.BooleanField(default=False)
+
+    updated = models.DateTimeField(auto_now=True)
+
+    created = models.DateTimeField(auto_now_add=True)
+
+    acc_year = models.CharField(max_length=50, null=True, blank=True)
+
+    session_id = models.CharField(max_length=255, null=True, blank=True)
+
+    sess_user_type = models.CharField(max_length=255, null=True, blank=True)
+
+    sess_branch_id = models.CharField(max_length=255, null=True, blank=True)
+
+    sess_company_id = models.CharField(max_length=255, null=True, blank=True)
+
+    sess_user_typer = models.CharField(max_length=255, null=True, blank=True)
+
+    class Meta:
+        db_table = "staff_creation"
+        ordering = ['-staff_id']
+
+    def __str__(self):
+        return self.staff_name
+
+
+
+class StaffEmploymentStatus(models.Model):
+
+    staff_employment_status_id = models.AutoField(
+        primary_key=True
+    )
+
+    unique_id = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        unique=True
+    )
+
+    staff_unique_id = models.CharField(
+        max_length=255
+    )
+
+    effective_from = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    effective_to = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    conf_due_date = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    conf_date = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    employment_status = models.CharField(
+        max_length=255
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    is_delete = models.BooleanField(default=False)
+
+    updated = models.DateTimeField(auto_now=True)
+
+    created = models.DateTimeField(auto_now_add=True)
+
+    acc_year = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    session_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+
+    sess_user_type = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+
+    sess_user_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+
+    sess_company_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+
+    sess_branch_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "staff_employment_status"
+        ordering = ['-staff_employment_status_id']
+
+    def __str__(self):
+        return self.employment_status
+
+        
+
+
+class StaffDependentDetails(models.Model):
+
+    staff_dep_id = models.AutoField(
+        primary_key=True
+    )
+
+    unique_id = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        unique=True
+    )
+
+    staff_unique_id = models.CharField(
+        max_length=50
+    )
+
+    relationship = models.CharField(
+        max_length=50
+    )
+
+    name = models.CharField(
+        max_length=50
+    )
+
+    gender = models.CharField(
+        max_length=50
+    )
+
+    date_of_birth = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    aadhar_no = models.CharField(
+        max_length=50
+    )
+
+    occupation = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    standard = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    school = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True
+    )
+
+    existing_illness = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True
+    )
+
+    illness_description = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True
+    )
+
+    existing_insurance = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True
+    )
+
+    insurance_no = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True
+    )
+
+    physically_challenged = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True
+    )
+
+    remarks = models.TextField(
+        null=True,
+        blank=True
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    is_delete = models.BooleanField(default=False)
+
+    updated = models.DateTimeField(auto_now=True)
+
+    created = models.DateTimeField(auto_now_add=True)
+
+    acc_year = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    session_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_user_type = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_user_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_company_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_branch_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "staff_dependent_details"
+        ordering = ['-staff_dep_id']
+
+    def __str__(self):
+        return self.name
+
+
+
+class StaffAccountDetails(models.Model):
+
+    staff_acc_id = models.AutoField(
+        primary_key=True
+    )
+
+    unique_id = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        unique=True
+    )
+
+    staff_unique_id = models.CharField(
+        max_length=100
+    )
+
+    salary_type = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    bank_status = models.CharField(
+        max_length=20
+    )
+
+    bank_name = models.CharField(
+        max_length=100
+    )
+
+    account_no = models.CharField(
+        max_length=100
+    )
+
+    accountant_name = models.CharField(
+        max_length=100
+    )
+
+    ifsc_code = models.CharField(
+        max_length=100
+    )
+
+    contact_no = models.CharField(
+        max_length=100
+    )
+
+    gst_no = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True
+    )
+
+    address = models.TextField()
+
+    is_active = models.BooleanField(default=True)
+
+    is_delete = models.BooleanField(default=False)
+
+    updated = models.DateTimeField(auto_now=True)
+
+    created = models.DateTimeField(auto_now_add=True)
+
+    acc_year = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    session_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_user_type = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_user_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_company_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_branch_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "staff_account_details"
+        ordering = ['-staff_acc_id']
+
+    def __str__(self):
+        return self.accountant_name
