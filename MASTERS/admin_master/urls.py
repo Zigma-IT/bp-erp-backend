@@ -15,9 +15,13 @@ router.extra_api_root_dict = OrderedDict ({
     "user-types": "user-type-list",
     "user-types-create": "user-type-create",
     "main-screens-list": "main-screen-list",
+        "main-screens-create": "main-screen-create",
+
     "screen-sections": "screen-section-list",
+        "screen-sections-create": "screen-section-create",
     "user-permissions": "user-permission-list",
     "user-permissions-create": "user-permission-create",
+
 })
 
 # User Creation endpoints
@@ -58,6 +62,33 @@ permission_patterns = [
     path('user-permissions/<int:pk>/toggle/', views.toggle_user_type_permission, name='user-permission-toggle'),
 ]
 
+screen_section_patterns = [
+
+    path(
+        'screen-sections/',
+        views.screen_section_list,
+        name='screen-section-list'
+    ),
+
+    path(
+        'screen-sections/create/',
+        views.create_screen_section,
+        name='screen-section-create'
+    ),
+
+    path(
+        'screen-sections/<int:pk>/',
+        views.update_screen_section,
+        name='screen-section-update'
+    ),
+
+    path(
+        'screen-sections/<int:pk>/toggle/',
+        views.toggle_screen_section,
+        name='screen-section-toggle'
+    ),
+]
+
 # Combine all patterns.
 # Put explicit path routes first so they win over router detail routes like
 # /user-types/<pk>/ and /main-screens/<pk>/, which would otherwise capture
@@ -68,5 +99,7 @@ urlpatterns = (
     user_type_patterns +
     screen_patterns +
     permission_patterns +
+        screen_section_patterns +
+
     [path('', include(router.urls))]
 )
