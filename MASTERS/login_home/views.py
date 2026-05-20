@@ -85,6 +85,86 @@ class AuthViewSet(viewsets.ViewSet):
         request.user.auth_token.delete()
         return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='my_permissions')
+    def my_permissions(self, request):
+        """
+        Return the permission tree for the logged-in user based on their UserType.
+        Returns all_access=True for super admins / users without a UserCreation record.
+        """
+        from admin_master.models import UserCreation, UserTypePermission
+
+        try:
+            user_creation = UserCreation.objects.select_related('user_type').get(
+                username=request.user.username
+            )
+        except UserCreation.DoesNotExist:
+            return Response({
+                "all_access": True,
+                "user_type": None,
+                "user_type_name": "Super Admin",
+                "main_screens": [],
+            })
+
+        if not user_creation.user_type:
+            return Response({
+                "all_access": True,
+                "user_type": None,
+                "user_type_name": "No User Type",
+                "main_screens": [],
+            })
+
+        user_type = user_creation.user_type
+
+        permissions = (
+            UserTypePermission.objects
+            .select_related('main_screen', 'user_screen', 'user_screen__screen_section')
+            .filter(user_type=user_type, status=True)
+            .order_by(
+                'main_screen__order_no', 'main_screen__name',
+                'user_screen__screen_section__order_no',
+                'user_screen__order_no',
+            )
+        )
+
+        main_screens: dict = {}
+        for perm in permissions:
+            ms = perm.main_screen
+            if ms.id not in main_screens:
+                main_screens[ms.id] = {
+                    "id": ms.id,
+                    "name": ms.name,
+                    "folder_key": ms.folder_key or "",
+                    "order_no": ms.order_no,
+                    "screens": [],
+                }
+            if perm.user_screen:
+                us = perm.user_screen
+                main_screens[ms.id]["screens"].append({
+                    "id": us.id,
+                    "screen_name": us.screen_name,
+                    "folder_name": us.folder_name,
+                    "section_id": us.screen_section_id,
+                    "section_name": us.screen_section.name if us.screen_section_id else "",
+                    "order_no": us.order_no,
+                    "can_add": perm.can_add,
+                    "can_update": perm.can_update,
+                    "can_list": perm.can_list,
+                    "can_delete": perm.can_delete,
+                    "can_view": perm.can_view,
+                    "can_print": perm.can_print,
+                })
+
+        sorted_screens = sorted(
+            main_screens.values(), key=lambda x: (x["order_no"], x["name"])
+        )
+
+        return Response({
+            "all_access": False,
+            "user_type": user_type.id,
+            "user_type_name": user_type.name,
+            "main_screens": sorted_screens,
+        })
+
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def change_password(self, request):
         """

@@ -15,6 +15,8 @@ urlpatterns = [
     path('api/purchase/', include('purchase_master.urls')),
     # HR Master Routes
     path('api/masters/hr/', include('hr_master.urls')),
+    # Ticket Master Routes
+    path('api/', include('ticket_master.urls')),
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema')),

@@ -58,10 +58,18 @@ INSTALLED_APPS = [
     'purchase_master.apps.PurchaseMasterConfig',
     'drf_spectacular',
         'hr_master.apps.HrMasterConfig',
+        'ticket_master.apps.TicketMasterConfig',
 
 ]
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
 }
 
 MIDDLEWARE = [
