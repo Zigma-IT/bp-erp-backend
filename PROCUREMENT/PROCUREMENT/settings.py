@@ -12,9 +12,13 @@ from corsheaders.defaults import default_headers
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 MASTERS_DIR = BASE_DIR.parent / "MASTERS"
+PROCUREMENT_APPS_DIR = BASE_DIR / "procurement"
 
 if str(MASTERS_DIR) not in sys.path:
     sys.path.insert(0, str(MASTERS_DIR))
+
+if str(PROCUREMENT_APPS_DIR) not in sys.path:
+    sys.path.insert(0, str(PROCUREMENT_APPS_DIR))
 
 # --------------------------------------------------
 # SECURITY
