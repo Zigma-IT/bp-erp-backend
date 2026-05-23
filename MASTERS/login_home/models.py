@@ -1,22 +1,32 @@
 # Home page models for managing departments, employees, and manual attendance records in the admin module of the MASTERS app.
+import uuid
+
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 
-class Department(models.Model):
+
+class UniqueIDMixin(models.Model):
+    unique_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    class Meta:
+        abstract = True
+
+
+class Department(UniqueIDMixin):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
         ordering = ['name']
 
     def __str__(self):
         return self.name
 
 
-class Employee(models.Model):
+class Employee(UniqueIDMixin):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     employee_id = models.CharField(max_length=50, unique=True)
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True)
@@ -27,14 +37,14 @@ class Employee(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
         ordering = ['employee_id']
 
     def __str__(self):
         return f"{self.employee_id} - {self.user.get_full_name()}"
 
 
-class ManualAttendance(models.Model):
+class ManualAttendance(UniqueIDMixin):
     STATUS_CHOICES = [
         ('present', 'Present'),
         ('absent', 'Absent'),
@@ -52,7 +62,7 @@ class ManualAttendance(models.Model):
     recorded_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
+    class Meta(UniqueIDMixin.Meta):
         ordering = ['-attendance_date']
         unique_together = ['employee', 'attendance_date']
         indexes = [

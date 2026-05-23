@@ -1,4 +1,6 @@
+import os
 from pathlib import Path
+from corsheaders.defaults import default_headers
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -13,7 +15,29 @@ SECRET_KEY = 'django-insecure-rc2yf8g_b69*$u)x3w34=b3)#$qku5uv7f3o2a$l!9od3rj#^y
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["0.0.0.0", "localhost", "127.0.0.1"]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5175",
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_HEADERS = list(default_headers)
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5175",
+]
 
 
 # Application definition
@@ -25,20 +49,32 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'rest_framework',
     'rest_framework.authtoken',
-    'login_home',
-    'admin_master',
-    'common_master',
-    'purchase_master',
+    'login_home.apps.LoginConfig',
+    'admin_master.apps.AdminMasterConfig',
+    'common_master.apps.CommonMasterConfig',
+    'purchase_master.apps.PurchaseMasterConfig',
     'drf_spectacular',
+    'hr_master.apps.HrMasterConfig',
+    'ticket_master.apps.TicketMasterConfig',
+
 ]
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
 }
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -70,11 +106,10 @@ WSGI_APPLICATION = 'MASTERS.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-# Uncomment for MySQL/MariaDB in production:
 DATABASES = {
-    'default': {
+       'masters_db': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'BP_TEST',
+        'NAME': 'masters_db',
         'USER': 'root',
         'PASSWORD': 'admin@123',
         'HOST': '127.0.0.1',
@@ -84,8 +119,29 @@ DATABASES = {
             'charset': 'utf8mb4',
             'use_unicode': True,
         }
-    }
+    },
+
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'masters_db',
+        'USER': 'root',
+        'PASSWORD': 'admin@123',
+        'HOST': '127.0.0.1',
+        'PORT': '3306',
+        'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            'charset': 'utf8mb4',
+            'use_unicode': True,
+        }
+    },
 }
+
+# Keep the historical masters_db alias available even when masters now points
+# at the default/shared database. Some code paths still reference this alias.
+if 'masters_db' not in DATABASES:
+    DATABASES['masters_db'] = DATABASES['default'].copy()
+    if 'OPTIONS' in DATABASES['default']:
+        DATABASES['masters_db']['OPTIONS'] = DATABASES['default']['OPTIONS'].copy()
 
 
 
@@ -126,3 +182,5 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

@@ -1,10 +1,14 @@
+"""Serializers for authentication, employees, and attendance endpoints."""
+
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from drf_spectacular.utils import extend_schema_serializer
 from rest_framework import serializers
 
 from .models import Department, Employee, ManualAttendance
 
 
+@extend_schema_serializer(component_name="AuthUser")
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
@@ -15,12 +19,12 @@ class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)
     password = serializers.CharField(write_only=True)
 
-    def validate(self, data):
-        user = authenticate(username=data["username"], password=data["password"])
+    def validate(self, attrs):
+        user = authenticate(username=attrs["username"], password=attrs["password"])
         if not user:
             raise serializers.ValidationError("Invalid username or password")
-        data["user"] = user
-        return data
+        attrs["user"] = user
+        return attrs
 
 
 class ChangePasswordSerializer(serializers.Serializer):
@@ -28,15 +32,15 @@ class ChangePasswordSerializer(serializers.Serializer):
     new_password = serializers.CharField(write_only=True, min_length=8)
     new_password_confirm = serializers.CharField(write_only=True, min_length=8)
 
-    def validate(self, data):
-        if data["new_password"] != data["new_password_confirm"]:
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["new_password_confirm"]:
             raise serializers.ValidationError({"new_password": "New passwords do not match"})
 
         user = self.context["request"].user
-        if not user.check_password(data["old_password"]):
+        if not user.check_password(attrs["old_password"]):
             raise serializers.ValidationError({"old_password": "Old password is incorrect"})
 
-        return data
+        return attrs
 
 
 class DepartmentSerializer(serializers.ModelSerializer):

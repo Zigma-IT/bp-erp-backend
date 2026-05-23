@@ -1,18 +1,35 @@
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+
+from MASTERS.api_router import ExtendedDefaultRouter
+from collections import OrderedDict
 from . import views
 
 # Initialize router for ViewSets
-router = DefaultRouter()
-router.register(r'user-types', views.UserTypeViewSet)
+router = ExtendedDefaultRouter()
 router.register(r'main-screens', views.MainScreenViewSet)
+router.extra_api_root_dict = OrderedDict ({
+    "users-creation": "user-list",
+    "users-creation-create": "user-create",
+    "user-screens": "user-screen-list",
+    "user-screens-create": "user-screen-create",
+    "user-types": "user-type-list",
+    "user-types-create": "user-type-create",
+    "main-screens-list": "main-screen-list",
+        "main-screens-create": "main-screen-create",
 
-# User endpoints
+    "screen-sections": "screen-section-list",
+        "screen-sections-create": "screen-section-create",
+    "user-permissions": "user-permission-list",
+    "user-permissions-create": "user-permission-create",
+
+})
+
+# User Creation endpoints
 user_patterns = [
-    path('users/', views.user_list, name='user-list'),
-    path('users/create/', views.create_user, name='user-create'),
-    path('users/<int:pk>/', views.update_user, name='user-update'),
-    path('users/<int:pk>/toggle/', views.toggle_user_status, name='user-toggle'),
+    path('users_creation/', views.user_list, name='user-list'),
+    path('users_creation/create/', views.create_user, name='user-create'),
+    path('users_creation/<int:pk>/', views.update_user, name='user-update'),
+    path('users_creation/<int:pk>/toggle/', views.toggle_user_status, name='user-toggle'),
 ]
 
 # User Screen endpoints
@@ -45,12 +62,44 @@ permission_patterns = [
     path('user-permissions/<int:pk>/toggle/', views.toggle_user_type_permission, name='user-permission-toggle'),
 ]
 
-# Combine all patterns
+screen_section_patterns = [
+
+    path(
+        'screen-sections/',
+        views.screen_section_list,
+        name='screen-section-list'
+    ),
+
+    path(
+        'screen-sections/create/',
+        views.create_screen_section,
+        name='screen-section-create'
+    ),
+
+    path(
+        'screen-sections/<int:pk>/',
+        views.update_screen_section,
+        name='screen-section-update'
+    ),
+
+    path(
+        'screen-sections/<int:pk>/toggle/',
+        views.toggle_screen_section,
+        name='screen-section-toggle'
+    ),
+]
+
+# Combine all patterns.
+# Put explicit path routes first so they win over router detail routes like
+# /user-types/<pk>/ and /main-screens/<pk>/, which would otherwise capture
+# "create" or "list" as a pk and return 405/404 responses.
 urlpatterns = (
-    [path('', include(router.urls))] +
     user_patterns +
     user_screen_patterns +
     user_type_patterns +
     screen_patterns +
-    permission_patterns
+    permission_patterns +
+        screen_section_patterns +
+
+    [path('', include(router.urls))]
 )

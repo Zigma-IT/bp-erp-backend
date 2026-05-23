@@ -10,5 +10,11 @@ dependencies = [
     "djangorestframework>=3.17.1",
     "drf-spectacular>=0.29.0",
     "mysqlclient>=2.2.8",
+    "pillow>=12.2.0",
     "requests>=2.33.1",
+    "rg>=0.0.76",
 ]
+
+[tool.pyright]
+extraPaths = ["MASTERS", "PROCUREMENT"]
+

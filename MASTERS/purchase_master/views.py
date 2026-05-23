@@ -1,14 +1,36 @@
 # Units - This file defines the API views for managing units in the purchase_master module of the MASTERS app, including a viewset for CRUD operations on UnitMaster model instances and path-based views for listing units with pagination and search functionality, creating new units, updating existing units, and toggling unit status. The UnitViewSet class provides methods for handling create, update, and delete operations, while the path-based views allow for more customized handling of unit-related API requests, including soft deletion by deactivating units instead of permanently removing them from the database.
-from django.shortcuts import render
+import uuid
+
+from typing import Any, cast
+
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
+from django.db import connections
+from django.db.models import Q
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from django.db.models import Q
-from .models import UnitMaster
-from .serializers import UnitSerializer
+
+from MASTERS.schema_utils import (
+    DATATABLE_PARAMETERS,
+    SEARCH_PARAMETER,
+    query_int_parameter,
+)
+from common_master.models import Company
+from .models import (
+    Category,
+    ItemGroup,
+    ItemMaster,
+    ProductCreation,
+    StandardBOM,
+    StandardBOMItem,
+    SubGroup,
+    UnitMaster,
+)
+from .serializers import CreateBOMSerializer, StandardBOMSerializer, UnitSerializer
 
 class UnitViewSet(viewsets.ModelViewSet):
-    queryset = UnitMaster.objects.all().order_by('-id')
+    queryset = UnitMaster.objects.all().order_by('-pk')
     serializer_class = UnitSerializer
 
     def create(self, request, *args, **kwargs):
@@ -35,7 +57,7 @@ def unit_list(request):
     length = int(request.GET.get('length', 10))
     search = request.GET.get('search[value]', '')
 
-    queryset = UnitMaster.objects.all().order_by('-id')
+    queryset = UnitMaster.objects.all().order_by('-pk')
 
     total = queryset.count()
 
@@ -54,6 +76,7 @@ def unit_list(request):
     for i, item in enumerate(serializer.data, start=1):
         data.append({
             "sno": start + i,
+            "unique_id": item["unique_id"],
             "unit_name": item["unit_name"],
             "decimal_points": item["decimal_points"],
             "description": item["description"] or "-",
@@ -112,26 +135,17 @@ def toggle_unit(request, pk):
 
     return Response({"message": "Status toggled", "status": obj.is_active})
 
-
-
 # Item_groups - This file defines the API views for managing item groups in the purchase_master module of the MASTERS app, including path-based views for listing item groups with pagination and search functionality, creating new item groups, updating existing item groups, and toggling item group status. The views handle HTTP requests and return appropriate responses based on the operations performed on the ItemGroup model, allowing for organized management of item group data within the system.
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from .models import ItemGroup
-
-
 # LIST (with optional search)
 @api_view(['GET'])
 def item_group_list(request):
     search = request.GET.get('search', '')
-
-    queryset = ItemGroup.objects.all()
+    queryset = ItemGroup.objects.all().order_by("-id")
 
     if search:
         queryset = queryset.filter(group_name__icontains=search)
 
-    data = list(queryset.values())
+    data = list(queryset.values("id", "group_name", "code", "description", "is_active"))
 
     return Response({
         "status": True,
@@ -229,24 +243,13 @@ def toggle_item_group(request, pk):
         "message": "Status updated successfully",
         "is_active": obj.is_active
     })
-
-
 #Item_sub_groups - This file defines the API views for managing item sub groups in the purchase_master module of the MASTERS app, including path-based views for listing item sub groups with pagination and search functionality, creating new item sub groups, updating existing item sub groups, and toggling item sub group status. The views handle HTTP requests and return appropriate responses based on the operations performed on the SubGroup model, allowing for organized management of item sub group data within the system.
-from django.shortcuts import render
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from .models import SubGroup
-from .models import ItemGroup
-
-
 # LIST
 @api_view(['GET'])
 def sub_group_list(request):
     search = request.GET.get('search', '')
     group_id = request.GET.get('group_id')
-
-    queryset = SubGroup.objects.select_related('group').all()
+    queryset = SubGroup.objects.select_related("group").all().order_by("-id")
 
     if group_id:
         queryset = queryset.filter(group_id=group_id)
@@ -254,18 +257,19 @@ def sub_group_list(request):
     if search:
         queryset = queryset.filter(sub_group_name__icontains=search)
 
-    data = []
-    for obj in queryset:
-        data.append({
-            "id": obj.id,
+    data = [
+        {
+            "id": obj.pk,
             "sub_group_name": obj.sub_group_name,
             "sub_group_code": obj.sub_group_code,
             "group_name": obj.group.group_name,
             "group_code": obj.group.code,
-            "group_id": obj.group.id,
+            "group_id": obj.group_id,
             "description": obj.description,
-            "is_active": obj.is_active
-        })
+            "is_active": obj.is_active,
+        }
+        for obj in queryset
+    ]
 
     return Response({
         "status": True,
@@ -307,7 +311,7 @@ def create_sub_group(request):
         sub_group_name=name,
         sub_group_code=code,
         description=description,
-        is_active=is_active
+        is_active=is_active,
     )
 
     return Response({
@@ -319,11 +323,6 @@ def create_sub_group(request):
 # UPDATE
 @api_view(['PUT'])
 def update_sub_group(request, pk):
-    try:
-        obj = SubGroup.objects.get(id=pk)
-    except SubGroup.DoesNotExist:
-        return Response({"status": False, "message": "Sub group not found"}, status=404)
-
     group_id = request.data.get('group_id')
     name = request.data.get('sub_group_name')
     code = request.data.get('sub_group_code')
@@ -338,6 +337,11 @@ def update_sub_group(request, pk):
 
     if not code:
         return Response({"status": False, "message": "Sub group code is required"}, status=400)
+
+    try:
+        obj = SubGroup.objects.get(id=pk)
+    except SubGroup.DoesNotExist:
+        return Response({"status": False, "message": "Sub group not found"}, status=404)
 
     try:
         group = ItemGroup.objects.get(id=group_id)
@@ -383,25 +387,18 @@ def toggle_sub_group(request, pk):
 
 # DROPDOWN (for create page)
 @api_view(['GET'])
-def group_dropdown(request):
-    groups = ItemGroup.objects.filter(is_active=True).values('id', 'group_name', 'code')
+def sub_group_group_dropdown(request):
+    groups = list(
+        ItemGroup.objects.filter(is_active=True)
+        .order_by("group_name")
+        .values("id", "group_name", "code")
+    )
 
     return Response({
         "status": True,
-        "data": list(groups)
+        "data": groups
     })
-
-
 # Item_category's - This file defines the API views for managing item categories in the purchase_master module of the MASTERS app, including path-based views for listing item categories with pagination and search functionality, creating new item categories, updating existing item categories, and toggling item category status. The views handle HTTP requests and return appropriate responses based on the operations performed on the Category model, allowing for organized management of item category data within the system. Additionally, there are views for retrieving dropdown data for groups and sub groups to facilitate category creation and updates.
-from django.shortcuts import render
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from .models import Category
-from .models import ItemGroup
-from .models import SubGroup
-
-
 # LIST
 @api_view(['GET'])
 def category_list(request):
@@ -423,7 +420,7 @@ def category_list(request):
     data = []
     for obj in queryset:
         data.append({
-            "id": obj.id,
+            "id": obj.pk,
             "category_name": obj.category_name,
             "category_code": obj.category_code,
             "group_name": obj.group.group_name,
@@ -514,7 +511,7 @@ def update_category(request, pk):
     try:
         group = ItemGroup.objects.get(id=group_id)
         sub_group = SubGroup.objects.get(id=sub_group_id, group=group)
-    except:
+    except (ItemGroup.DoesNotExist, SubGroup.DoesNotExist):
         return Response({"status": False, "message": "Invalid group/sub group"}, status=400)
 
     if Category.objects.exclude(id=pk).filter(category_name=name, sub_group=sub_group).exists():
@@ -557,14 +554,14 @@ def toggle_category(request, pk):
 
 # GROUP DROPDOWN
 @api_view(['GET'])
-def group_dropdown(request):
+def category_group_dropdown(request):
     data = ItemGroup.objects.filter(is_active=True).values('id', 'group_name', 'code')
     return Response({"status": True, "data": list(data)})
 
 
 # SUB GROUP DROPDOWN (based on group)
 @api_view(['GET'])
-def sub_group_dropdown(request):
+def category_sub_group_dropdown(request):
     group_id = request.GET.get('group_id')
 
     queryset = SubGroup.objects.filter(is_active=True)
@@ -578,23 +575,10 @@ def sub_group_dropdown(request):
         "status": True,
         "data": list(data)
     })
-
-
-
 # Item_names/code - This file defines the API views for managing item names and codes in the purchase_master module of the MASTERS app, including path-based views for listing items with pagination and search functionality, creating new items, updating existing items, and toggling item status. The views handle HTTP requests and return appropriate responses based on the operations performed on the ItemMaster model, allowing for organized management of item data within the system. Additionally, there are views for retrieving dropdown data for groups, sub groups, and categories to facilitate item creation and updates.
-from django.shortcuts import render
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from .models import ItemMaster
-from .models import ItemGroup
-from .models import SubGroup
-from .models import Category
-from .models import UnitMaster
-
-
 # LIST
 @api_view(['GET'])
-def item_list(request):
+def item_list_legacy(request):
     group_id = request.GET.get('group_id')
     sub_group_id = request.GET.get('sub_group_id')
     category_id = request.GET.get('category_id')
@@ -619,12 +603,13 @@ def item_list(request):
     data = []
     for obj in queryset:
         data.append({
-            "id": obj.id,
+            "id": obj.pk,
             "item_name": obj.item_name,
             "item_code": obj.item_code,
             "group_name": obj.group.group_name,
             "sub_group_name": obj.sub_group.sub_group_name,
             "category_name": obj.category.category_name,
+            "unit_name": obj.unit.unit_name if obj.unit else None,
             "description": obj.description,
             "is_active": obj.is_active
         })
@@ -634,7 +619,7 @@ def item_list(request):
 
 # CREATE
 @api_view(['POST'])
-def create_item(request):
+def create_item_legacy(request):
     group_id = request.data.get('group_id')
     sub_group_id = request.data.get('sub_group_id')
     category_id = request.data.get('category_id')
@@ -679,7 +664,7 @@ def create_item(request):
 
 # TOGGLE
 @api_view(['PATCH'])
-def toggle_item(request, pk):
+def toggle_item_legacy(request, pk):
     obj = ItemMaster.objects.get(id=pk)
     obj.is_active = not obj.is_active
     obj.save()
@@ -703,16 +688,6 @@ def generate_item_code(group, sub_group, category):
 
     return f"{prefix}-{str(new_number).zfill(5)}"
 
-
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from .models import ItemMaster
-from .models import ItemGroup
-from .models import SubGroup
-from .models import Category
-from .models import UnitMaster
-
-
 # LIST
 @api_view(['GET'])
 def item_list(request):
@@ -740,7 +715,7 @@ def item_list(request):
     data = []
     for obj in queryset:
         data.append({
-            "id": obj.id,
+            "id": obj.pk,
             "item_name": obj.item_name,
             "item_code": obj.item_code,
             "group_name": obj.group.group_name,
@@ -798,6 +773,56 @@ def create_item(request):
     })
 
 
+# UPDATE
+@api_view(['PUT'])
+def update_item(request, pk):
+    try:
+        obj = ItemMaster.objects.get(id=pk)
+    except ItemMaster.DoesNotExist:
+        return Response({"status": False, "message": "Item not found"}, status=404)
+
+    group_id = request.data.get('group_id')
+    sub_group_id = request.data.get('sub_group_id')
+    category_id = request.data.get('category_id')
+    unit_id = request.data.get('unit_id')
+    item_name = request.data.get('item_name')
+
+    if not all([group_id, sub_group_id, category_id, item_name]):
+        return Response({"status": False, "message": "Required fields missing"}, status=400)
+
+    try:
+        group = ItemGroup.objects.get(id=group_id)
+        sub_group = SubGroup.objects.get(id=sub_group_id, group=group)
+        category = Category.objects.get(id=category_id, sub_group=sub_group)
+        unit = UnitMaster.objects.get(id=unit_id) if unit_id else None
+    except ItemGroup.DoesNotExist:
+        return Response({"status": False, "message": "Item group not found"}, status=404)
+    except SubGroup.DoesNotExist:
+        return Response({"status": False, "message": "Item sub-group not found"}, status=404)
+    except Category.DoesNotExist:
+        return Response({"status": False, "message": "Category not found"}, status=404)
+    except UnitMaster.DoesNotExist:
+        return Response({"status": False, "message": "Unit not found"}, status=404)
+
+    obj.group = group
+    obj.sub_group = sub_group
+    obj.category = category
+    obj.unit = unit
+    obj.item_name = item_name
+    obj.reorder_level = request.data.get('reorder_level', obj.reorder_level)
+    obj.reorder_qty = request.data.get('reorder_qty', obj.reorder_qty)
+    obj.purchase_lead_time = request.data.get('purchase_lead_time', obj.purchase_lead_time)
+    obj.unit_price = request.data.get('unit_price', obj.unit_price)
+    obj.hsn_code = request.data.get('hsn_code', obj.hsn_code)
+    obj.tolerance = request.data.get('tolerance', obj.tolerance)
+    obj.tax = request.data.get('tax', obj.tax)
+    obj.description = request.data.get('description', obj.description)
+    obj.is_active = request.data.get('is_active', obj.is_active)
+    obj.save()
+
+    return Response({"status": True, "message": "Item updated successfully"})
+
+
 # TOGGLE
 @api_view(['PATCH'])
 def toggle_item(request, pk):
@@ -806,18 +831,7 @@ def toggle_item(request, pk):
     obj.save()
 
     return Response({"status": True})
-
-
-
 # Product creations - This file defines the API views for managing product creation in the purchase_master module of the MASTERS app, including path-based views for listing products with pagination and search functionality, creating new products, updating existing products, and toggling product status. The views handle HTTP requests and return appropriate responses based on the operations performed on the ProductCreation model, allowing for organized management of product data within the system. Additionally, there are views for retrieving dropdown data for companies, groups, and sub groups to facilitate product creation and updates.
-from django.shortcuts import render
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from .models import ProductCreation, Company
-from .models import ItemGroup
-from .models import SubGroup
-
-
 # LIST
 @api_view(['GET'])
 def product_list(request):
@@ -845,8 +859,8 @@ def product_list(request):
     data = []
     for obj in queryset:
         data.append({
-            "id": obj.id,
-            "company_name": obj.company.company_name if obj.company else None,
+            "id": obj.pk,
+            "company_name": obj.company.name if obj.company else None,
             "group_name": obj.group.group_name if obj.group else None,
             "sub_group_name": obj.sub_group.sub_group_name if obj.sub_group else None,
             "product_name": obj.product_name,
@@ -918,13 +932,13 @@ def toggle_product(request, pk):
 
 @api_view(['GET'])
 def company_dropdown(request):
-    data = Company.objects.all().values('id', 'company_name')
-    return Response({"status": True, "data": list(data)})
+    data = [{"id": obj.pk, "company_name": obj.name} for obj in Company.objects.all()]
+    return Response({"status": True, "data": data})
 
 
 @api_view(['GET'])
 def group_dropdown(request):
-    data = ItemGroup.objects.filter(is_active=True).values('id', 'group_name')
+    data = ItemGroup.objects.filter(is_active=True).values('id', 'group_name', 'code')
     return Response({"status": True, "data": list(data)})
 
 
@@ -936,22 +950,10 @@ def sub_group_dropdown(request):
     if group_id:
         queryset = queryset.filter(group_id=group_id)
 
-    data = queryset.values('id', 'sub_group_name')
+    data = queryset.values('id', 'sub_group_name', 'sub_group_code')
 
     return Response({"status": True, "data": list(data)})
-
-
 # Standard BOM - This file defines the API views for managing standard bills of materials (BOM) in the production module of the MASTERS app, including path-based views for listing BOMs with pagination and search functionality, creating new BOMs with multiple items, viewing BOM details, and updating existing BOMs. The views handle HTTP requests and return appropriate responses based on the operations performed on the StandardBOM and StandardBOMItem models, allowing for organized management of BOM data within the system. Additionally, there are validations in place to ensure data integrity during BOM creation and updates.
-from django.shortcuts import render
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from .models import StandardBOM, StandardBOMItem
-from .serializers import StandardBOMSerializer, CreateBOMSerializer, StandardBOMItemSerializer
-from .models import ProductCreation
-from .models import ItemMaster
-
-
 # LIST ALL BOMS
 @api_view(['GET'])
 def bom_list(request):
@@ -1001,8 +1003,9 @@ def create_bom(request):
                 "errors": serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        product_id = serializer.validated_data.get('product_id')
-        items = serializer.validated_data.get('items')
+        validated_data = cast(dict[str, Any], serializer.validated_data)
+        product_id = cast(int, validated_data.get('product_id'))
+        items = cast(list[dict[str, Any]], validated_data.get('items', []))
 
         # Get product
         try:
@@ -1080,7 +1083,7 @@ def update_bom(request, pk):
     """Update BOM items"""
     try:
         bom = StandardBOM.objects.get(id=pk)
-        items = request.data.get('items', [])
+        items = cast(list[dict[str, Any]], request.data.get('items', []))
 
         if not items:
             return Response({
@@ -1089,7 +1092,7 @@ def update_bom(request, pk):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # Delete existing items
-        bom.items.all().delete()
+        StandardBOMItem.objects.filter(bom=bom).delete()
 
         # Create new items
         for row in items:
@@ -1186,3 +1189,153 @@ def item_dropdown(request):
             "status": False,
             "message": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+unit_list = extend_schema(
+    parameters=DATATABLE_PARAMETERS,
+    responses=OpenApiTypes.OBJECT,
+)(unit_list)
+create_unit = extend_schema(
+    request=UnitSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(create_unit)
+update_unit = extend_schema(
+    request=UnitSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(update_unit)
+toggle_unit = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_unit)
+
+item_group_list = extend_schema(
+    parameters=[SEARCH_PARAMETER],
+    responses=OpenApiTypes.OBJECT,
+)(item_group_list)
+create_item_group = extend_schema(
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+)(create_item_group)
+update_item_group = extend_schema(
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+)(update_item_group)
+toggle_item_group = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_item_group)
+
+sub_group_list = extend_schema(
+    parameters=[
+        SEARCH_PARAMETER,
+        query_int_parameter("group_id", "Optional group ID to filter sub groups."),
+    ],
+    responses=OpenApiTypes.OBJECT,
+)(sub_group_list)
+create_sub_group = extend_schema(
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+)(create_sub_group)
+update_sub_group = extend_schema(
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+)(update_sub_group)
+toggle_sub_group = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_sub_group)
+group_dropdown = extend_schema(
+    responses=OpenApiTypes.OBJECT,
+)(group_dropdown)
+
+category_list = extend_schema(
+    parameters=[
+        SEARCH_PARAMETER,
+        query_int_parameter("group_id", "Optional group ID to filter categories."),
+        query_int_parameter("sub_group_id", "Optional sub group ID to filter categories."),
+    ],
+    responses=OpenApiTypes.OBJECT,
+)(category_list)
+create_category = extend_schema(
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+)(create_category)
+update_category = extend_schema(
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+)(update_category)
+toggle_category = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_category)
+sub_group_dropdown = extend_schema(
+    parameters=[query_int_parameter("group_id", "Optional group ID to filter sub groups.")],
+    responses=OpenApiTypes.OBJECT,
+)(sub_group_dropdown)
+
+item_list = extend_schema(
+    parameters=[
+        SEARCH_PARAMETER,
+        query_int_parameter("group_id", "Optional group ID to filter items."),
+        query_int_parameter("sub_group_id", "Optional sub group ID to filter items."),
+        query_int_parameter("category_id", "Optional category ID to filter items."),
+    ],
+    responses=OpenApiTypes.OBJECT,
+)(item_list)
+create_item = extend_schema(
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+)(create_item)
+toggle_item = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_item)
+
+product_list = extend_schema(
+    parameters=[
+        SEARCH_PARAMETER,
+        query_int_parameter("group_id", "Optional group ID to filter products."),
+        query_int_parameter("sub_group_id", "Optional sub group ID to filter products."),
+        query_int_parameter("company_id", "Optional company ID to filter products."),
+    ],
+    responses=OpenApiTypes.OBJECT,
+)(product_list)
+create_product = extend_schema(
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+)(create_product)
+update_product = extend_schema(
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+)(update_product)
+toggle_product = extend_schema(
+    request=None,
+    responses=OpenApiTypes.OBJECT,
+)(toggle_product)
+company_dropdown = extend_schema(
+    responses=OpenApiTypes.OBJECT,
+)(company_dropdown)
+
+bom_list = extend_schema(
+    responses=OpenApiTypes.OBJECT,
+)(bom_list)
+create_bom = extend_schema(
+    request=CreateBOMSerializer,
+    responses=OpenApiTypes.OBJECT,
+)(create_bom)
+view_bom = extend_schema(
+    responses=OpenApiTypes.OBJECT,
+)(view_bom)
+update_bom = extend_schema(
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+)(update_bom)
+delete_bom = extend_schema(
+    responses=OpenApiTypes.OBJECT,
+)(delete_bom)
+product_dropdown = extend_schema(
+    responses=OpenApiTypes.OBJECT,
+)(product_dropdown)
+item_dropdown = extend_schema(
+    responses=OpenApiTypes.OBJECT,
+)(item_dropdown)
