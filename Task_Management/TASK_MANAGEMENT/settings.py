@@ -83,6 +83,9 @@ INSTALLED_APPS = [
     # Local Task Management Apps
     'tasks',
     'followups',
+    'dashboard',
+    'reports',
+
 ]
 
 # --------------------------------------------------
