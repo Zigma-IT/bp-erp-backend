@@ -57,8 +57,8 @@ INSTALLED_APPS = [
     'common_master.apps.CommonMasterConfig',
     'purchase_master.apps.PurchaseMasterConfig',
     'drf_spectacular',
-        'hr_master.apps.HrMasterConfig',
-        'ticket_master.apps.TicketMasterConfig',
+    'hr_master.apps.HrMasterConfig',
+    'ticket_master.apps.TicketMasterConfig',
 
 ]
 REST_FRAMEWORK = {

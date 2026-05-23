@@ -413,3 +413,4 @@ class RemarkCreation(models.Model):
 
     def __str__(self):
         return self.remark_type
+
