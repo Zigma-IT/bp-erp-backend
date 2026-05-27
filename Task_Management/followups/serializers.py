@@ -10,3 +10,5 @@ class TaskFollowupsSerializer(serializers.ModelSerializer):
         model = TaskFollowups
 
         fields = '__all__'
+
+
