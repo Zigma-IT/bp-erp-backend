@@ -28,6 +28,18 @@ from .views import (
     StaffAccountDetailsListAPIView,
     StaffAccountDetailsRetrieveAPIView,
     StaffAccountDetailsDeleteAPIView,
+    
+    StaffQualificationCreateAPIView,
+    StaffQualificationListAPIView,
+    StaffQualificationRetrieveAPIView,
+    StaffQualificationUpdateAPIView,
+    StaffQualificationDeleteAPIView,
+    StaffQualificationToggleAPIView,
+     LwfEntryCreateAPIView,
+    LwfEntryListAPIView,
+    LwfEntryRetrieveAPIView,
+    LwfEntryUpdateAPIView,
+    LwfEntryDeleteAPIView,
 )
 
 
@@ -85,4 +97,79 @@ urlpatterns = [
     path('staff-account/create/', StaffAccountDetailsCreateAPIView.as_view(), name='staff-account-create'),
     path('staff-account/<int:staff_acc_id>/', StaffAccountDetailsRetrieveAPIView.as_view(), name='staff-account-detail'),
     path('staff-account/<int:staff_acc_id>/delete/', StaffAccountDetailsDeleteAPIView.as_view(), name='staff-account-delete'),
+
+
+    # CREATE
+    path(
+        'qualification/create/',
+        StaffQualificationCreateAPIView.as_view(),
+        name='qualification-create'
+    ),
+
+    # LIST
+    path(
+        'qualification/list/',
+        StaffQualificationListAPIView.as_view(),
+        name='qualification-list'
+    ),
+
+    # RETRIEVE
+    path(
+        'qualification/retrieve/<int:staff_qual_id>/',
+        StaffQualificationRetrieveAPIView.as_view(),
+        name='qualification-retrieve'
+    ),
+
+    # UPDATE
+    path(
+        'qualification/update/<int:staff_qual_id>/',
+        StaffQualificationUpdateAPIView.as_view(),
+        name='qualification-update'
+    ),
+
+    # DELETE
+    path(
+        'qualification/delete/<int:staff_qual_id>/',
+        StaffQualificationDeleteAPIView.as_view(),
+        name='qualification-delete'
+    ),
+    path(
+        'qualification/toggle/<int:staff_qual_id>/',
+        StaffQualificationToggleAPIView.as_view(),
+        name='qualification-toggle'
+    ),
+     # CREATE
+    path(
+        'lwf-entry/create/',
+        LwfEntryCreateAPIView.as_view(),
+        name='lwf-entry-create'
+    ),
+
+    # LIST
+    path(
+        'lwf-entry/list/',
+        LwfEntryListAPIView.as_view(),
+        name='lwf-entry-list'
+    ),
+
+    # RETRIEVE
+    path(
+        'lwf-entry/retrieve/<int:lwf_id>/',
+        LwfEntryRetrieveAPIView.as_view(),
+        name='lwf-entry-retrieve'
+    ),
+
+    # UPDATE
+    path(
+        'lwf-entry/update/<int:lwf_id>/',
+        LwfEntryUpdateAPIView.as_view(),
+        name='lwf-entry-update'
+    ),
+
+    # DELETE
+    path(
+        'lwf-entry/delete/<int:lwf_id>/',
+        LwfEntryDeleteAPIView.as_view(),
+        name='lwf-entry-delete'
+    ),
 ]

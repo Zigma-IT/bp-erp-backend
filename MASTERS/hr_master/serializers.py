@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import DepartmentCreation, DesignationCreation, StaffCreation, StaffEmploymentStatus,StaffDependentDetails, StaffAccountDetails
+from .models import DepartmentCreation, DesignationCreation, StaffCreation, StaffEmploymentStatus,StaffDependentDetails, StaffAccountDetails, StaffQualificationDetails,  LwfEntry
 
 
 class DepartmentCreationSerializer(serializers.ModelSerializer):
@@ -40,3 +40,21 @@ class StaffAccountDetailsSerializer(serializers.ModelSerializer):
     class Meta:
         model = StaffAccountDetails
         fields = '__all__'
+
+
+class StaffQualificationSerializer(serializers.ModelSerializer):
+
+    class Meta:
+
+        model = StaffQualificationDetails
+
+        fields = '__all__'
+
+
+class LwfEntrySerializer(serializers.ModelSerializer):
+
+    class Meta:
+
+        model = LwfEntry
+
+        fields = "__all__"

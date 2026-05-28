@@ -606,3 +606,157 @@ class StaffAccountDetails(models.Model):
 
     def __str__(self):
         return self.accountant_name
+
+class StaffQualificationDetails(models.Model):
+
+    staff_qual_id = models.AutoField(primary_key=True)
+
+    unique_id = models.CharField(max_length=50)
+
+    staff_unique_id = models.CharField(max_length=50)
+
+    education_type = models.CharField(max_length=50)
+
+    degree = models.CharField(max_length=50)
+
+    college_name = models.CharField(max_length=100)
+
+    year_passing = models.CharField(max_length=50)
+
+    percentage = models.CharField(max_length=50)
+
+    university = models.CharField(max_length=100)
+
+    doc_name = models.TextField(
+        blank=True,
+        null=True
+    )
+
+    is_active = models.IntegerField(default=1)
+
+    is_delete = models.IntegerField(default=0)
+
+    updated = models.DateTimeField(auto_now=True)
+
+    created = models.DateTimeField(auto_now_add=True)
+
+    acc_year = models.CharField(max_length=50)
+
+    session_id = models.CharField(max_length=50)
+
+    sess_user_type = models.CharField(max_length=50)
+
+    sess_user_id = models.CharField(max_length=50)
+
+    sess_company_id = models.CharField(max_length=50)
+
+    sess_branch_id = models.CharField(max_length=50)
+
+    class Meta:
+
+        db_table = 'staff_qualification_details'
+
+    def __str__(self):
+
+        return self.unique_id
+
+
+class LwfEntry(models.Model):
+
+    lwf_id = models.AutoField(primary_key=True)
+
+    unique_id = models.CharField(
+        max_length=50,
+        unique=True
+    )
+
+    project_id = models.CharField(
+        max_length=50
+    )
+
+    state = models.CharField(
+        max_length=50
+    )
+
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    deduction_frequency = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    deduction_months = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+
+    employer_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    excluded_designations = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+
+    effective_from = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    is_active = models.IntegerField(
+        default=1
+    )
+
+    is_delete = models.IntegerField(
+        default=0
+    )
+
+    updated = models.DateTimeField(
+        auto_now=True
+    )
+
+    created = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    acc_year = models.CharField(
+        max_length=50
+    )
+
+    session_id = models.CharField(
+        max_length=50
+    )
+
+    sess_user_type = models.CharField(
+        max_length=50
+    )
+
+    sess_user_id = models.CharField(
+        max_length=50
+    )
+
+    sess_company_id = models.CharField(
+        max_length=50
+    )
+
+    sess_branch_id = models.CharField(
+        max_length=50
+    )
+
+    class Meta:
+
+        db_table = "lwf_entry"
+
+    def __str__(self):
+
+        return self.unique_id
