@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import DepartmentCreation, DesignationCreation, StaffCreation, StaffEmploymentStatus,StaffDependentDetails, StaffAccountDetails, StaffQualificationDetails,  LwfEntry
+from .models import DepartmentCreation, DesignationCreation, StaffCreation, StaffEmploymentStatus,StaffDependentDetails, StaffAccountDetails, StaffQualificationDetails,  LwfEntry , ProfessionalTax , LeaveMasterCreation , ReasonCreation
 
 
 class DepartmentCreationSerializer(serializers.ModelSerializer):
@@ -57,4 +57,27 @@ class LwfEntrySerializer(serializers.ModelSerializer):
 
         model = LwfEntry
 
+        fields = "__all__"
+
+class ProfessionalTaxSerializer(serializers.ModelSerializer):
+
+    class Meta:
+
+        model = ProfessionalTax
+
+        fields = "__all__"
+
+class LeaveMasterCreationSerializer(serializers.ModelSerializer):
+
+    class Meta:
+
+        model = LeaveMasterCreation
+
+        fields = "__all__"
+
+
+class ReasonCreationSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = ReasonCreation
         fields = "__all__"

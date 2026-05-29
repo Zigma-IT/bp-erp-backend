@@ -40,6 +40,26 @@ from .views import (
     LwfEntryRetrieveAPIView,
     LwfEntryUpdateAPIView,
     LwfEntryDeleteAPIView,
+
+
+    ProfessionalTaxCreateAPIView,
+    ProfessionalTaxListAPIView,
+    ProfessionalTaxRetrieveAPIView,
+    ProfessionalTaxUpdateAPIView,
+    ProfessionalTaxDeleteAPIView,
+
+    LeaveMasterCreateAPIView,
+    LeaveMasterListAPIView,
+    LeaveMasterRetrieveAPIView,
+    LeaveMasterUpdateAPIView,
+    LeaveMasterDeleteAPIView,
+
+      ReasonCreateAPIView,
+    ReasonListAPIView,
+    ReasonRetrieveAPIView,
+    ReasonUpdateAPIView,
+    ReasonDeleteAPIView,
+
 )
 
 
@@ -171,5 +191,100 @@ urlpatterns = [
         'lwf-entry/delete/<int:lwf_id>/',
         LwfEntryDeleteAPIView.as_view(),
         name='lwf-entry-delete'
+    ),
+      # CREATE
+    path(
+        'prof-tax/create/',
+        ProfessionalTaxCreateAPIView.as_view(),
+        name='prof-tax-create'
+    ),
+
+    # LIST
+    path(
+        'prof-tax/list/',
+        ProfessionalTaxListAPIView.as_view(),
+        name='prof-tax-list'
+    ),
+
+    # RETRIEVE
+    path(
+        'prof-tax/retrieve/<int:id>/',
+        ProfessionalTaxRetrieveAPIView.as_view(),
+        name='prof-tax-retrieve'
+    ),
+
+    # UPDATE
+    path(
+        'prof-tax/update/<int:id>/',
+        ProfessionalTaxUpdateAPIView.as_view(),
+        name='prof-tax-update'
+    ),
+
+    # DELETE
+    path(
+        'prof-tax/delete/<int:id>/',
+        ProfessionalTaxDeleteAPIView.as_view(),
+        name='prof-tax-delete'
+    ),
+
+    # CREATE
+    path(
+        'leave-master/create/',
+        LeaveMasterCreateAPIView.as_view(),
+        name='leave-master-create'
+    ),
+
+    # LIST
+    path(
+        'leave-master/list/',
+        LeaveMasterListAPIView.as_view(),
+        name='leave-master-list'
+    ),
+
+    # RETRIEVE
+    path(
+        'leave-master/retrieve/<int:id>/',
+        LeaveMasterRetrieveAPIView.as_view(),
+        name='leave-master-retrieve'
+    ),
+
+    # UPDATE
+    path(
+        'leave-master/update/<int:id>/',
+        LeaveMasterUpdateAPIView.as_view(),
+        name='leave-master-update'
+    ),
+
+    # DELETE
+    path(
+        'leave-master/delete/<int:id>/',
+        LeaveMasterDeleteAPIView.as_view(),
+        name='leave-master-delete'
+    ),
+    # REASON
+    path(
+        'reason/create/',
+        ReasonCreateAPIView.as_view(),
+        name='reason-create'
+    ),
+    path(
+        'reason/list/',
+        ReasonListAPIView.as_view(),
+        name='reason-list'
+    ),
+    path(
+        'reason/retrieve/<int:pk>/',
+        ReasonRetrieveAPIView.as_view(),
+        name='reason-retrieve'
+    ),
+    path(
+        'reason/update/<int:pk>/',
+        ReasonUpdateAPIView.as_view(),
+        name='reason-update'
+    ),
+    path(
+        'reason/delete/<int:pk>/',
+        ReasonDeleteAPIView.as_view(),
+        name='reason-delete'
     ),
 ]

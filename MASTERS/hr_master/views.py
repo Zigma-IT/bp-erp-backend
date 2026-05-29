@@ -14,8 +14,8 @@ from django.db import connection
 from django.db.utils import OperationalError
 from django.utils import timezone
 
-from .models import DepartmentCreation, DesignationCreation, StaffCreation, StaffEmploymentStatus,StaffDependentDetails,StaffAccountDetails, StaffQualificationDetails, LwfEntry
-from .serializers import DepartmentCreationSerializer, DesignationCreationSerializer, StaffCreationSerializer , StaffEmploymentStatusSerializer,StaffDependentDetailsSerializer,StaffAccountDetailsSerializer, StaffQualificationSerializer, LwfEntrySerializer
+from .models import DepartmentCreation, DesignationCreation, StaffCreation, StaffEmploymentStatus,StaffDependentDetails,StaffAccountDetails, StaffQualificationDetails, LwfEntry , ProfessionalTax , LeaveMasterCreation , ReasonCreation
+from .serializers import DepartmentCreationSerializer, DesignationCreationSerializer, StaffCreationSerializer , StaffEmploymentStatusSerializer,StaffDependentDetailsSerializer,StaffAccountDetailsSerializer, StaffQualificationSerializer, LwfEntrySerializer, ProfessionalTaxSerializer , LeaveMasterCreationSerializer, ReasonCreationSerializer
 
 
 def _is_lwf_schema_mismatch(error: Exception) -> bool:
@@ -1300,4 +1300,343 @@ class LwfEntryDeleteAPIView(DestroyAPIView):
                 "message": "LWF Entry Deleted Successfully"
             },
             status=status.HTTP_200_OK
+        )
+
+# CREATE
+class ProfessionalTaxCreateAPIView(APIView):
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+
+        serializer = ProfessionalTaxSerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+
+            serializer.save()
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Professional Tax Created Successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            {
+                "status": False,
+                "errors": serializer.errors
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+# LIST
+class ProfessionalTaxListAPIView(ListAPIView):
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    serializer_class = ProfessionalTaxSerializer
+
+    def get_queryset(self):
+
+        return ProfessionalTax.objects.filter(
+            is_delete=False
+        ).order_by('-id')
+
+
+# RETRIEVE
+class ProfessionalTaxRetrieveAPIView(RetrieveAPIView):
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    queryset = ProfessionalTax.objects.filter(
+        is_delete=False
+    )
+
+    serializer_class = ProfessionalTaxSerializer
+
+    lookup_field = 'id'
+
+
+# UPDATE
+class ProfessionalTaxUpdateAPIView(UpdateAPIView):
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    queryset = ProfessionalTax.objects.filter(
+        is_delete=False
+    )
+
+    serializer_class = ProfessionalTaxSerializer
+
+    lookup_field = 'id'
+
+
+# DELETE
+class ProfessionalTaxDeleteAPIView(DestroyAPIView):
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    queryset = ProfessionalTax.objects.all()
+
+    serializer_class = ProfessionalTaxSerializer
+
+    lookup_field = 'id'
+
+    def delete(self, request, *args, **kwargs):
+
+        instance = self.get_object()
+
+        instance.is_delete = True
+
+        instance.save()
+
+        return Response(
+            {
+                "status": True,
+                "message": "Professional Tax Deleted Successfully"
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+# CREATE
+class LeaveMasterCreateAPIView(APIView):
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    def post(self, request):
+
+        serializer = LeaveMasterCreationSerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+
+            serializer.save()
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Leave Master Created Successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            {
+                "status": False,
+                "errors": serializer.errors
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+# LIST
+class LeaveMasterListAPIView(ListAPIView):
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    serializer_class = LeaveMasterCreationSerializer
+
+    def get_queryset(self):
+
+        return LeaveMasterCreation.objects.filter(
+            is_delete=False
+        ).order_by('-id')
+
+
+# RETRIEVE
+class LeaveMasterRetrieveAPIView(RetrieveAPIView):
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    queryset = LeaveMasterCreation.objects.filter(
+        is_delete=False
+    )
+
+    serializer_class = LeaveMasterCreationSerializer
+
+    lookup_field = "id"
+
+
+# UPDATE
+class LeaveMasterUpdateAPIView(UpdateAPIView):
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    queryset = LeaveMasterCreation.objects.filter(
+        is_delete=False
+    )
+
+    serializer_class = LeaveMasterCreationSerializer
+
+    lookup_field = "id"
+
+
+# DELETE
+class LeaveMasterDeleteAPIView(DestroyAPIView):
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    queryset = LeaveMasterCreation.objects.all()
+
+    serializer_class = LeaveMasterCreationSerializer
+
+    lookup_field = "id"
+
+    def delete(self, request, *args, **kwargs):
+
+        instance = self.get_object()
+
+        instance.is_delete = True
+
+        instance.save()
+
+        return Response(
+            {
+                "status": True,
+                "message": "Leave Master Deleted Successfully"
+            },
+            status=status.HTTP_200_OK
+        )
+
+class ReasonCreateAPIView(APIView):
+
+    def post(self, request):
+
+        serializer = ReasonCreationSerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+
+            serializer.save()
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class ReasonListAPIView(APIView):
+
+    def get(self, request):
+
+        reasons = ReasonCreation.objects.filter(
+            is_delete=False
+        ).order_by("-id")
+
+        serializer = ReasonCreationSerializer(
+            reasons,
+            many=True
+        )
+
+        return Response(serializer.data)
+
+
+class ReasonRetrieveAPIView(APIView):
+
+    def get(self, request, pk):
+
+        try:
+
+            reason = ReasonCreation.objects.get(
+                pk=pk,
+                is_delete=False
+            )
+
+        except ReasonCreation.DoesNotExist:
+
+            return Response(
+                {"error": "Reason not found"},
+                status=404
+            )
+
+        serializer = ReasonCreationSerializer(reason)
+
+        return Response(serializer.data)
+
+
+class ReasonUpdateAPIView(APIView):
+
+    def put(self, request, pk):
+
+        try:
+
+            reason = ReasonCreation.objects.get(pk=pk)
+
+        except ReasonCreation.DoesNotExist:
+
+            return Response(
+                {"error": "Reason not found"},
+                status=404
+            )
+
+        serializer = ReasonCreationSerializer(
+            reason,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+
+            serializer.save()
+
+            return Response(serializer.data)
+
+        return Response(
+            serializer.errors,
+            status=400
+        )
+
+
+class ReasonDeleteAPIView(APIView):
+
+    def delete(self, request, pk):
+
+        try:
+
+            reason = ReasonCreation.objects.get(pk=pk)
+
+        except ReasonCreation.DoesNotExist:
+
+            return Response(
+                {"error": "Reason not found"},
+                status=404
+            )
+
+        reason.is_delete = True
+        reason.save()
+
+        return Response(
+            {
+                "message": "Reason deleted successfully"
+            }
         )

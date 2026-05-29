@@ -760,3 +760,335 @@ class LwfEntry(models.Model):
     def __str__(self):
 
         return self.unique_id
+class ProfessionalTax(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    unique_id = models.CharField(
+        max_length=50,
+        unique=True
+    )
+
+    project_id = models.CharField(
+        max_length=255
+    )
+
+    state = models.CharField(
+        max_length=100
+    )
+
+    salary_from = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    salary_to = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    gender = models.CharField(
+        max_length=20,
+        default='All'
+    )
+
+    deduction_frequency = models.CharField(
+        max_length=50
+    )
+
+    period_start_month = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True
+    )
+
+    period_end_month = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True
+    )
+
+    deduction_month = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True
+    )
+
+    special_month = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True
+    )
+
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+
+    annual_cap = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    acc_year = models.CharField(max_length=50)
+
+    session_id = models.CharField(max_length=50)
+
+    sess_user_type = models.CharField(max_length=50)
+
+    sess_user_id = models.CharField(max_length=50)
+
+    sess_company_id = models.CharField(max_length=50)
+
+    sess_branch_id = models.CharField(max_length=50)
+
+    is_active = models.BooleanField(default=True)
+
+    is_delete = models.BooleanField(default=False)
+
+    created = models.DateTimeField(auto_now_add=True)
+
+    updated = models.DateTimeField(auto_now=True)
+
+    is_salary_slab = models.BooleanField(default=False)
+
+    is_gender_bound = models.BooleanField(default=False)
+
+    is_special_month = models.BooleanField(default=False)
+
+    is_annual_cap = models.BooleanField(default=False)
+
+    special_amt = models.IntegerField(
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+
+        db_table = "prof_tax"
+
+    def __str__(self):
+
+        return self.unique_id
+
+class LeaveMasterCreation(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    unique_id = models.CharField(max_length=50)
+
+    leave_type = models.CharField(max_length=100)
+
+    policy_unique_id = models.CharField(
+        max_length=30,
+        null=True,
+        blank=True
+    )
+
+    annual_entitlement = models.BooleanField(default=False)
+
+    balance_handling = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    max_carry_forward = models.IntegerField(default=0)
+
+    accrual_method = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    accrual_monthly_value = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0
+    )
+
+    gender_applicable = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    min_service_months = models.IntegerField(default=0)
+
+    max_occurrences_per_year = models.IntegerField(default=0)
+
+    half_day = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    children_limit = models.IntegerField(default=0)
+
+    is_document_required = models.BooleanField(default=False)
+
+    document_text = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+
+    is_sandwich_applicable = models.BooleanField(default=False)
+
+    excess_handling = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    notice_period_days = models.IntegerField(default=0)
+
+    is_active = models.BooleanField(default=True)
+
+    is_delete = models.BooleanField(default=False)
+
+    updated = models.DateTimeField(
+        auto_now=True,
+        null=True,
+        blank=True
+    )
+
+    created = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    acc_year = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True
+    )
+
+    session_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_user_type = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_user_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_company_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_branch_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+
+        db_table = "leave_master_creation"
+
+    def __str__(self):
+
+        return self.leave_type
+
+class ReasonCreation(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    unique_id = models.CharField(
+        max_length=50
+    )
+
+    reason_name = models.CharField(
+        max_length=100
+    )
+
+    description = models.TextField()
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    is_delete = models.BooleanField(
+        default=False
+    )
+
+    updated_user_id = models.CharField(
+        max_length=40,
+        null=True,
+        blank=True
+    )
+
+    updated = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+
+    created_user_id = models.CharField(
+        max_length=40,
+        null=True,
+        blank=True
+    )
+
+    created = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    acc_year = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True
+    )
+
+    session_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True
+    )
+
+    sess_user_type = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True
+    )
+
+    sess_user_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True
+    )
+
+    sess_company_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True
+    )
+
+    sess_branch_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True
+    )
+
+    class Meta:
+        db_table = "reason_creation"
+
+    def __str__(self):
+        return self.reason_name
