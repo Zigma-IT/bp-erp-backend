@@ -25,6 +25,7 @@ class DepartmentCreation(models.Model):
 
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
+    
 
     class Meta:
         db_table = "department_creation"
@@ -425,7 +426,7 @@ class StaffDependentDetails(models.Model):
         null=True,
         blank=True
     )
-
+    
     existing_insurance = models.CharField(
         max_length=100,
         null=True,
@@ -1092,3 +1093,164 @@ class ReasonCreation(models.Model):
 
     def __str__(self):
         return self.reason_name
+
+
+class PayCycle(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    name = models.CharField(
+        max_length=100,
+        unique=True
+    )
+
+    from_day = models.PositiveSmallIntegerField()
+
+    to_day = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True
+    )
+
+    last_day_flag = models.BooleanField(
+        default=False
+    )
+
+    description = models.TextField(
+        null=True,
+        blank=True
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    created_by = models.IntegerField(
+        null=True,
+        blank=True
+    )
+
+    updated_by = models.IntegerField(
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "pay_cycle"
+
+    def __str__(self):
+        return self.name
+
+
+class SalaryCategory(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    unique_id = models.CharField(
+        max_length=50,
+        unique=True
+    )
+
+    salary_category = models.CharField(
+        max_length=100
+    )
+
+    description = models.TextField(
+        blank=True,
+        null=True
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    is_delete = models.BooleanField(
+        default=False
+    )
+
+    updated = models.DateTimeField(
+        auto_now=True
+    )
+
+    created = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    acc_year = models.CharField(
+        max_length=50
+    )
+
+    session_id = models.CharField(
+        max_length=50
+    )
+
+    sess_user_type = models.CharField(
+        max_length=50
+    )
+
+    sess_user_id = models.CharField(
+        max_length=50
+    )
+
+    sess_company_id = models.CharField(
+        max_length=50
+    )
+
+    sess_branch_id = models.CharField(
+        max_length=50
+    )
+
+    class Meta:
+        db_table = "salary_category"
+
+    def __str__(self):
+        return self.salary_category
+
+class BandMaster(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    band_name = models.CharField(
+        max_length=50
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    acc_year = models.CharField(
+        max_length=50
+    )
+
+    session_id = models.CharField(
+        max_length=50
+    )
+
+    sess_user_type = models.CharField(
+        max_length=50
+    )
+
+    sess_user_id = models.CharField(
+        max_length=50
+    )
+
+    sess_company_id = models.CharField(
+        max_length=50
+    )
+
+    sess_branch_id = models.CharField(
+        max_length=50
+    )
+
+    class Meta:
+        db_table = "band_master"
+
+    def __str__(self):
+        return self.band_name

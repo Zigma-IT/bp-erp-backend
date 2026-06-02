@@ -41,7 +41,6 @@ from .views import (
     LwfEntryUpdateAPIView,
     LwfEntryDeleteAPIView,
 
-
     ProfessionalTaxCreateAPIView,
     ProfessionalTaxListAPIView,
     ProfessionalTaxRetrieveAPIView,
@@ -54,14 +53,31 @@ from .views import (
     LeaveMasterUpdateAPIView,
     LeaveMasterDeleteAPIView,
 
-      ReasonCreateAPIView,
+    ReasonCreateAPIView,
     ReasonListAPIView,
     ReasonRetrieveAPIView,
     ReasonUpdateAPIView,
     ReasonDeleteAPIView,
 
-)
+    PayCycleCreateAPIView,
+    PayCycleListAPIView,
+    PayCycleRetrieveAPIView,
+    PayCycleUpdateAPIView,
+    PayCycleDeleteAPIView,
 
+      SalaryCategoryCreateAPIView,
+    SalaryCategoryListAPIView,
+    SalaryCategoryRetrieveAPIView,
+    SalaryCategoryUpdateAPIView,
+    SalaryCategoryDeleteAPIView,
+
+     BandMasterCreateAPIView,
+    BandMasterListAPIView,
+    BandMasterRetrieveAPIView,
+    BandMasterUpdateAPIView,
+    BandMasterDeleteAPIView,
+
+)
 
 urlpatterns = [
     # DEPARTMENT URLs - RESTful Pattern
@@ -158,6 +174,7 @@ urlpatterns = [
         StaffQualificationToggleAPIView.as_view(),
         name='qualification-toggle'
     ),
+
      # CREATE
     path(
         'lwf-entry/create/',
@@ -192,6 +209,7 @@ urlpatterns = [
         LwfEntryDeleteAPIView.as_view(),
         name='lwf-entry-delete'
     ),
+    
       # CREATE
     path(
         'prof-tax/create/',
@@ -287,4 +305,106 @@ urlpatterns = [
         ReasonDeleteAPIView.as_view(),
         name='reason-delete'
     ),
+
+    path(
+        "pay-cycle/create/",
+        PayCycleCreateAPIView.as_view(),
+        name="pay-cycle-create"
+    ),
+
+    path(
+        "pay-cycle/list/",
+        PayCycleListAPIView.as_view(),
+        name="pay-cycle-list"
+    ),
+
+    path(
+        "pay-cycle/<int:pk>/",
+        PayCycleRetrieveAPIView.as_view(),
+        name="pay-cycle-detail"
+    ),
+
+    path(
+        "pay-cycle/update/<int:pk>/",
+        PayCycleUpdateAPIView.as_view(),
+        name="pay-cycle-update"
+    ),
+
+    path(
+        "pay-cycle/delete/<int:pk>/",
+        PayCycleDeleteAPIView.as_view(),
+        name="pay-cycle-delete"
+    ),
+
+     # CREATE
+    path(
+        "salary-category/create/",
+        SalaryCategoryCreateAPIView.as_view(),
+        name="salary-category-create"
+    ),
+
+    # LIST
+    path(
+        "salary-category/list/",
+        SalaryCategoryListAPIView.as_view(),
+        name="salary-category-list"
+    ),
+
+    # RETRIEVE
+    path(
+        "salary-category/<int:pk>/",
+        SalaryCategoryRetrieveAPIView.as_view(),
+        name="salary-category-detail"
+    ),
+
+    # UPDATE
+    path(
+        "salary-category/update/<int:pk>/",
+        SalaryCategoryUpdateAPIView.as_view(),
+        name="salary-category-update"
+    ),
+
+    # DELETE
+    path(
+        "salary-category/delete/<int:pk>/",
+        SalaryCategoryDeleteAPIView.as_view(),
+        name="salary-category-delete"
+    ),
+
+
+    # CREATE
+    path(
+        "band-master/create/",
+        BandMasterCreateAPIView.as_view(),
+        name="band-master-create"
+    ),
+
+    # LIST
+    path(
+        "band-master/list/",
+        BandMasterListAPIView.as_view(),
+        name="band-master-list"
+    ),
+
+    # RETRIEVE
+    path(
+        "band-master/<int:pk>/",
+        BandMasterRetrieveAPIView.as_view(),
+        name="band-master-detail"
+    ),
+
+    # UPDATE
+    path(
+        "band-master/update/<int:pk>/",
+        BandMasterUpdateAPIView.as_view(),
+        name="band-master-update"
+    ),
+
+    # DELETE
+    path(
+        "band-master/delete/<int:pk>/",
+        BandMasterDeleteAPIView.as_view(),
+        name="band-master-delete"
+    ),
+
 ]

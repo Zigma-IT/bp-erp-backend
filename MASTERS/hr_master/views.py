@@ -14,8 +14,38 @@ from django.db import connection
 from django.db.utils import OperationalError
 from django.utils import timezone
 
-from .models import DepartmentCreation, DesignationCreation, StaffCreation, StaffEmploymentStatus,StaffDependentDetails,StaffAccountDetails, StaffQualificationDetails, LwfEntry , ProfessionalTax , LeaveMasterCreation , ReasonCreation
-from .serializers import DepartmentCreationSerializer, DesignationCreationSerializer, StaffCreationSerializer , StaffEmploymentStatusSerializer,StaffDependentDetailsSerializer,StaffAccountDetailsSerializer, StaffQualificationSerializer, LwfEntrySerializer, ProfessionalTaxSerializer , LeaveMasterCreationSerializer, ReasonCreationSerializer
+from .models import (
+    DepartmentCreation,
+    DesignationCreation,
+    StaffCreation,
+    StaffEmploymentStatus,
+    StaffDependentDetails,
+    StaffAccountDetails,
+    StaffQualificationDetails,
+    LwfEntry,
+    ProfessionalTax,
+    LeaveMasterCreation,
+    ReasonCreation,
+    PayCycle,
+    SalaryCategory,
+    BandMaster,
+)
+from .serializers import (
+    DepartmentCreationSerializer,
+    DesignationCreationSerializer,
+    StaffCreationSerializer,
+    StaffEmploymentStatusSerializer,
+    StaffDependentDetailsSerializer,
+    StaffAccountDetailsSerializer,
+    StaffQualificationSerializer,
+    LwfEntrySerializer,
+    ProfessionalTaxSerializer,
+    LeaveMasterCreationSerializer,
+    ReasonCreationSerializer,
+    PayCycleSerializer,
+    SalaryCategorySerializer,
+    BandMasterSerializer,
+)
 
 
 def _is_lwf_schema_mismatch(error: Exception) -> bool:
@@ -49,6 +79,38 @@ def _legacy_lwf_payload(data):
         "sess_branch_id": data.get("sess_branch_id", "0"),
         "created": timestamp,
         "updated": timestamp,
+    }
+
+
+def _prof_tax_payload(data):
+    timestamp = timezone.now()
+    return {
+        "unique_id": data.get("unique_id") or f"PROFTAX-{int(timestamp.timestamp() * 1000)}",
+        "project_id": data.get("project_id", ""),
+        "state": data.get("state", ""),
+        "salary_from": data.get("salary_from") or 0,
+        "salary_to": data.get("salary_to") or 0,
+        "gender": data.get("gender", "All"),
+        "deduction_frequency": data.get("deduction_frequency", "Monthly"),
+        "period_start_month": data.get("period_start_month", ""),
+        "period_end_month": data.get("period_end_month", ""),
+        "deduction_month": data.get("deduction_month", ""),
+        "special_month": data.get("special_month", ""),
+        "special_amt": data.get("special_amt") or 0,
+        "amount": data.get("amount") or 0,
+        "annual_cap": data.get("annual_cap") or 0,
+        "acc_year": data.get("acc_year") or str(timestamp.year),
+        "session_id": data.get("session_id", "web"),
+        "sess_user_type": data.get("sess_user_type", "admin"),
+        "sess_user_id": data.get("sess_user_id", "0"),
+        "sess_company_id": data.get("sess_company_id", "0"),
+        "sess_branch_id": data.get("sess_branch_id", "0"),
+        "is_active": data.get("is_active", True),
+        "is_delete": data.get("is_delete", False),
+        "is_salary_slab": bool(data.get("is_salary_slab")),
+        "is_gender_bound": bool(data.get("is_gender_bound")),
+        "is_special_month": bool(data.get("is_special_month")),
+        "is_annual_cap": bool(data.get("is_annual_cap")),
     }
 
 
@@ -1311,7 +1373,7 @@ class ProfessionalTaxCreateAPIView(APIView):
     def post(self, request):
 
         serializer = ProfessionalTaxSerializer(
-            data=request.data
+            data=_prof_tax_payload(request.data)
         )
 
         if serializer.is_valid():
@@ -1639,4 +1701,315 @@ class ReasonDeleteAPIView(APIView):
             {
                 "message": "Reason deleted successfully"
             }
+        )
+
+class PayCycleCreateAPIView(APIView):
+
+    def post(self, request):
+
+        serializer = PayCycleSerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class PayCycleListAPIView(APIView):
+
+    def get(self, request):
+
+        data = PayCycle.objects.all().order_by("-id")
+
+        serializer = PayCycleSerializer(
+            data,
+            many=True
+        )
+
+        return Response(serializer.data)
+
+
+class PayCycleRetrieveAPIView(APIView):
+
+    def get(self, request, pk):
+
+        try:
+            obj = PayCycle.objects.get(pk=pk)
+
+        except PayCycle.DoesNotExist:
+            return Response(
+                {"error": "Record not found"},
+                status=404
+            )
+
+        serializer = PayCycleSerializer(obj)
+
+        return Response(serializer.data)
+
+
+class PayCycleUpdateAPIView(APIView):
+
+    def put(self, request, pk):
+
+        try:
+            obj = PayCycle.objects.get(pk=pk)
+
+        except PayCycle.DoesNotExist:
+            return Response(
+                {"error": "Record not found"},
+                status=404
+            )
+
+        serializer = PayCycleSerializer(
+            obj,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(serializer.data)
+
+        return Response(
+            serializer.errors,
+            status=400
+        )
+
+
+class PayCycleDeleteAPIView(APIView):
+
+    def delete(self, request, pk):
+
+        try:
+            obj = PayCycle.objects.get(pk=pk)
+
+        except PayCycle.DoesNotExist:
+            return Response(
+                {"error": "Record not found"},
+                status=404
+            )
+
+        obj.delete()
+
+        return Response(
+            {"message": "Deleted Successfully"}
+        )
+class SalaryCategoryCreateAPIView(APIView):
+
+    def post(self, request):
+
+        serializer = SalaryCategorySerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class SalaryCategoryListAPIView(APIView):
+
+    def get(self, request):
+
+        queryset = SalaryCategory.objects.filter(
+            is_delete=False
+        ).order_by("-id")
+
+        serializer = SalaryCategorySerializer(
+            queryset,
+            many=True
+        )
+
+        return Response(serializer.data)
+
+
+class SalaryCategoryRetrieveAPIView(APIView):
+
+    def get(self, request, pk):
+
+        try:
+            obj = SalaryCategory.objects.get(pk=pk)
+
+        except SalaryCategory.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        serializer = SalaryCategorySerializer(obj)
+
+        return Response(serializer.data)
+
+
+class SalaryCategoryUpdateAPIView(APIView):
+
+    def put(self, request, pk):
+
+        try:
+            obj = SalaryCategory.objects.get(pk=pk)
+
+        except SalaryCategory.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        serializer = SalaryCategorySerializer(
+            obj,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(serializer.data)
+
+        return Response(
+            serializer.errors,
+            status=400
+        )
+
+
+class SalaryCategoryDeleteAPIView(APIView):
+
+    def delete(self, request, pk):
+
+        try:
+            obj = SalaryCategory.objects.get(pk=pk)
+
+        except SalaryCategory.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        obj.is_delete = True
+        obj.save()
+
+        return Response(
+            {"message": "Deleted Successfully"}
+        )
+
+class BandMasterCreateAPIView(APIView):
+
+    def post(self, request):
+
+        serializer = BandMasterSerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class BandMasterListAPIView(APIView):
+
+    def get(self, request):
+
+        queryset = BandMaster.objects.all().order_by("-id")
+
+        serializer = BandMasterSerializer(
+            queryset,
+            many=True
+        )
+
+        return Response(serializer.data)
+
+
+class BandMasterRetrieveAPIView(APIView):
+
+    def get(self, request, pk):
+
+        try:
+            obj = BandMaster.objects.get(pk=pk)
+
+        except BandMaster.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        serializer = BandMasterSerializer(obj)
+
+        return Response(serializer.data)
+
+
+class BandMasterUpdateAPIView(APIView):
+
+    def put(self, request, pk):
+
+        try:
+            obj = BandMaster.objects.get(pk=pk)
+
+        except BandMaster.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        serializer = BandMasterSerializer(
+            obj,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(serializer.data)
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class BandMasterDeleteAPIView(APIView):
+
+    def delete(self, request, pk):
+
+        try:
+            obj = BandMaster.objects.get(pk=pk)
+
+        except BandMaster.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        obj.delete()
+
+        return Response(
+            {"message": "Deleted Successfully"}
         )

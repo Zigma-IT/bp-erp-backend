@@ -1,5 +1,20 @@
 from rest_framework import serializers
-from .models import DepartmentCreation, DesignationCreation, StaffCreation, StaffEmploymentStatus,StaffDependentDetails, StaffAccountDetails, StaffQualificationDetails,  LwfEntry , ProfessionalTax , LeaveMasterCreation , ReasonCreation
+from .models import (
+    DepartmentCreation,
+    DesignationCreation,
+    StaffCreation,
+    StaffEmploymentStatus,
+    StaffDependentDetails,
+    StaffAccountDetails,
+    StaffQualificationDetails,
+    LwfEntry,
+    ProfessionalTax,
+    LeaveMasterCreation,
+    ReasonCreation,
+    PayCycle,
+    SalaryCategory,
+    BandMaster
+)
 
 
 class DepartmentCreationSerializer(serializers.ModelSerializer):
@@ -80,4 +95,22 @@ class ReasonCreationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ReasonCreation
+        fields = "__all__"
+
+class PayCycleSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = PayCycle
+        fields = "__all__"
+
+class SalaryCategorySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = SalaryCategory
+        fields = "__all__"
+
+class BandMasterSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = BandMaster
         fields = "__all__"
