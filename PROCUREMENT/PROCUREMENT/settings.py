@@ -142,7 +142,7 @@ DATABASES = {
     # REQUIRED DEFAULT DATABASE
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'procurement_db',
+        'NAME': 'procurement_db1',
         'USER': 'root',
         'PASSWORD': 'admin@123',
         'HOST': '127.0.0.1',
@@ -154,9 +154,9 @@ DATABASES = {
     },
 
     # OPTIONAL SECOND ALIAS
-    'procurement_db': {
+    'procurement_db1': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'procurement_db',
+        'NAME': 'procurement_db1',
         'USER': 'root',
         'PASSWORD': 'admin@123',
         'HOST': '127.0.0.1',
@@ -168,9 +168,9 @@ DATABASES = {
     },
 
     # Historical alias if needed
-    'masters_db': {
+    'masters_db1': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'masters_db',
+        'NAME': 'masters_db1',
         'USER': 'root',
         'PASSWORD': 'admin@123',
         'HOST': '127.0.0.1',
