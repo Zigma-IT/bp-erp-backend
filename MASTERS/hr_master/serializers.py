@@ -13,7 +13,9 @@ from .models import (
     ReasonCreation,
     PayCycle,
     SalaryCategory,
-    BandMaster
+    GradeMaster,
+    BandMaster,
+    LevelMaster,
 )
 
 
@@ -25,6 +27,9 @@ class DepartmentCreationSerializer(serializers.ModelSerializer):
 
 
 class DesignationCreationSerializer(serializers.ModelSerializer):
+
+    band_name = serializers.CharField(source='band.band_name', read_only=True)
+    level_name = serializers.CharField(source='level.level_name', read_only=True)
 
     class Meta:
         model = DesignationCreation
@@ -109,8 +114,24 @@ class SalaryCategorySerializer(serializers.ModelSerializer):
         model = SalaryCategory
         fields = "__all__"
 
+class GradeMasterSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = GradeMaster
+        fields = "__all__"
+
+
 class BandMasterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BandMaster
+        fields = "__all__"
+
+
+class LevelMasterSerializer(serializers.ModelSerializer):
+
+    band_name = serializers.CharField(source="band.band_name", read_only=True)
+
+    class Meta:
+        model = LevelMaster
         fields = "__all__"

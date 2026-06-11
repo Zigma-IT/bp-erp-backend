@@ -28,7 +28,9 @@ from .models import (
     ReasonCreation,
     PayCycle,
     SalaryCategory,
+    GradeMaster,
     BandMaster,
+    LevelMaster,
 )
 from .serializers import (
     DepartmentCreationSerializer,
@@ -44,7 +46,9 @@ from .serializers import (
     ReasonCreationSerializer,
     PayCycleSerializer,
     SalaryCategorySerializer,
+    GradeMasterSerializer,
     BandMasterSerializer,
+    LevelMasterSerializer,
 )
 
 
@@ -391,7 +395,9 @@ class DesignationListAPIView(ListAPIView):
     serializer_class = DesignationCreationSerializer
 
     def get_queryset(self):
-        return DesignationCreation.objects.filter(
+        return DesignationCreation.objects.select_related(
+            'band', 'level'
+        ).filter(
             is_delete=False
         ).order_by('-id')
 
@@ -1911,6 +1917,70 @@ class SalaryCategoryDeleteAPIView(APIView):
             {"message": "Deleted Successfully"}
         )
 
+class GradeDropdownAPIView(APIView):
+    """Returns active grades for use in dropdowns."""
+
+    def get(self, request):
+        queryset = GradeMaster.objects.filter(
+            is_active=True, is_delete=False
+        ).order_by("grade_name")
+        serializer = GradeMasterSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class GradeMasterCreateAPIView(APIView):
+
+    def post(self, request):
+        serializer = GradeMasterSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GradeMasterListAPIView(APIView):
+
+    def get(self, request):
+        queryset = GradeMaster.objects.filter(is_delete=False).order_by("-id")
+        serializer = GradeMasterSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class GradeMasterRetrieveAPIView(APIView):
+
+    def get(self, request, pk):
+        try:
+            obj = GradeMaster.objects.get(pk=pk, is_delete=False)
+        except GradeMaster.DoesNotExist:
+            return Response({"message": "Record not found"}, status=404)
+        return Response(GradeMasterSerializer(obj).data)
+
+
+class GradeMasterUpdateAPIView(APIView):
+
+    def put(self, request, pk):
+        try:
+            obj = GradeMaster.objects.get(pk=pk)
+        except GradeMaster.DoesNotExist:
+            return Response({"message": "Record not found"}, status=404)
+        serializer = GradeMasterSerializer(obj, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GradeMasterDeleteAPIView(APIView):
+
+    def delete(self, request, pk):
+        try:
+            obj = GradeMaster.objects.get(pk=pk)
+        except GradeMaster.DoesNotExist:
+            return Response({"message": "Record not found"}, status=404)
+        obj.delete()
+        return Response({"message": "Deleted Successfully"})
+
+
 class BandMasterCreateAPIView(APIView):
 
     def post(self, request):
@@ -2003,6 +2073,110 @@ class BandMasterDeleteAPIView(APIView):
             obj = BandMaster.objects.get(pk=pk)
 
         except BandMaster.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        obj.delete()
+
+        return Response(
+            {"message": "Deleted Successfully"}
+        )
+
+
+class LevelMasterCreateAPIView(APIView):
+
+    def post(self, request):
+
+        serializer = LevelMasterSerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class LevelMasterListAPIView(APIView):
+
+    def get(self, request):
+
+        queryset = LevelMaster.objects.select_related("band").all().order_by("-id")
+
+        serializer = LevelMasterSerializer(
+            queryset,
+            many=True
+        )
+
+        return Response(serializer.data)
+
+
+class LevelMasterRetrieveAPIView(APIView):
+
+    def get(self, request, pk):
+
+        try:
+            obj = LevelMaster.objects.select_related("band").get(pk=pk)
+
+        except LevelMaster.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        serializer = LevelMasterSerializer(obj)
+
+        return Response(serializer.data)
+
+
+class LevelMasterUpdateAPIView(APIView):
+
+    def put(self, request, pk):
+
+        try:
+            obj = LevelMaster.objects.get(pk=pk)
+
+        except LevelMaster.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        serializer = LevelMasterSerializer(
+            obj,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(serializer.data)
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class LevelMasterDeleteAPIView(APIView):
+
+    def delete(self, request, pk):
+
+        try:
+            obj = LevelMaster.objects.get(pk=pk)
+
+        except LevelMaster.DoesNotExist:
             return Response(
                 {"message": "Record not found"},
                 status=404

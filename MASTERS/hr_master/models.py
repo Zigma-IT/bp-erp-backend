@@ -38,13 +38,42 @@ class DepartmentCreation(models.Model):
 
 class DesignationCreation(models.Model):
 
+    STRUCTURE_CHOICES = (
+        ('Grade Based', 'Grade Based'),
+        ('Band Based', 'Band Based'),
+    )
+
     unique_id = models.UUIDField(
         default=uuid.uuid4,
         editable=False,
         unique=True
     )
 
-    grade_type = models.CharField(max_length=255)
+    structure_type = models.CharField(
+        max_length=50,
+        choices=STRUCTURE_CHOICES,
+        default='Grade Based'
+    )
+
+    grade_type = models.CharField(max_length=255, blank=True, default='')
+
+    band = models.ForeignKey(
+        'BandMaster',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='band_id',
+        related_name='designations'
+    )
+
+    level = models.ForeignKey(
+        'LevelMaster',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='level_id',
+        related_name='designations'
+    )
 
     designation = models.CharField(max_length=255)
 
@@ -1213,6 +1242,39 @@ class SalaryCategory(models.Model):
     def __str__(self):
         return self.salary_category
 
+class GradeMaster(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    grade_name = models.CharField(max_length=100)
+
+    is_active = models.BooleanField(default=True)
+
+    is_delete = models.BooleanField(default=False)
+
+    updated = models.DateTimeField(auto_now=True)
+
+    created = models.DateTimeField(auto_now_add=True)
+
+    acc_year = models.CharField(max_length=50)
+
+    session_id = models.CharField(max_length=50)
+
+    sess_user_type = models.CharField(max_length=50)
+
+    sess_user_id = models.CharField(max_length=50)
+
+    sess_company_id = models.CharField(max_length=50)
+
+    sess_branch_id = models.CharField(max_length=50)
+
+    class Meta:
+        db_table = "grade_master"
+
+    def __str__(self):
+        return self.grade_name
+
+
 class BandMaster(models.Model):
 
     id = models.AutoField(primary_key=True)
@@ -1254,3 +1316,64 @@ class BandMaster(models.Model):
 
     def __str__(self):
         return self.band_name
+
+
+class LevelMaster(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    band = models.ForeignKey(
+        BandMaster,
+        on_delete=models.PROTECT,
+        db_column="band_id"
+    )
+
+    level_name = models.CharField(
+        max_length=100
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    is_delete = models.BooleanField(
+        default=False
+    )
+
+    updated = models.DateTimeField(
+        auto_now=True
+    )
+
+    created = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    acc_year = models.CharField(
+        max_length=50
+    )
+
+    session_id = models.CharField(
+        max_length=50
+    )
+
+    sess_user_type = models.CharField(
+        max_length=50
+    )
+
+    sess_user_id = models.CharField(
+        max_length=50
+    )
+
+    sess_company_id = models.CharField(
+        max_length=50
+    )
+
+    sess_branch_id = models.CharField(
+        max_length=50
+    )
+
+    class Meta:
+        db_table = "level_master"
+
+    def __str__(self):
+        return self.level_name

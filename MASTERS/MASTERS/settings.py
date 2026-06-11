@@ -107,9 +107,9 @@ WSGI_APPLICATION = 'MASTERS.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASES = {
-       'masters_db': {
+       'masters_db1': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'masters_db',
+        'NAME': 'masters_db1',
         'USER': 'root',
         'PASSWORD': 'admin@123',
         'HOST': '127.0.0.1',
@@ -123,7 +123,7 @@ DATABASES = {
 
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'masters_db',
+        'NAME': 'masters_db1',
         'USER': 'root',
         'PASSWORD': 'admin@123',
         'HOST': '127.0.0.1',

@@ -71,11 +71,24 @@ from .views import (
     SalaryCategoryUpdateAPIView,
     SalaryCategoryDeleteAPIView,
 
+    GradeDropdownAPIView,
+    GradeMasterCreateAPIView,
+    GradeMasterListAPIView,
+    GradeMasterRetrieveAPIView,
+    GradeMasterUpdateAPIView,
+    GradeMasterDeleteAPIView,
+
      BandMasterCreateAPIView,
     BandMasterListAPIView,
     BandMasterRetrieveAPIView,
     BandMasterUpdateAPIView,
     BandMasterDeleteAPIView,
+
+    LevelMasterCreateAPIView,
+    LevelMasterListAPIView,
+    LevelMasterRetrieveAPIView,
+    LevelMasterUpdateAPIView,
+    LevelMasterDeleteAPIView,
 
 )
 
@@ -372,6 +385,41 @@ urlpatterns = [
     ),
 
 
+    # GRADE DROPDOWN (used by Designation form)
+    path(
+        "grades/",
+        GradeDropdownAPIView.as_view(),
+        name="grade-dropdown"
+    ),
+
+    # GRADE MASTER CRUD
+    path(
+        "grade-master/list/",
+        GradeMasterListAPIView.as_view(),
+        name="grade-master-list"
+    ),
+    path(
+        "grade-master/create/",
+        GradeMasterCreateAPIView.as_view(),
+        name="grade-master-create"
+    ),
+    path(
+        "grade-master/retrieve/<int:pk>/",
+        GradeMasterRetrieveAPIView.as_view(),
+        name="grade-master-detail"
+    ),
+    path(
+        "grade-master/update/<int:pk>/",
+        GradeMasterUpdateAPIView.as_view(),
+        name="grade-master-update"
+    ),
+    path(
+        "grade-master/delete/<int:pk>/",
+        GradeMasterDeleteAPIView.as_view(),
+        name="grade-master-delete"
+    ),
+
+
     # CREATE
     path(
         "band-master/create/",
@@ -405,6 +453,42 @@ urlpatterns = [
         "band-master/delete/<int:pk>/",
         BandMasterDeleteAPIView.as_view(),
         name="band-master-delete"
+    ),
+
+
+    # CREATE
+    path(
+        "level-master/create/",
+        LevelMasterCreateAPIView.as_view(),
+        name="level-master-create"
+    ),
+
+    # LIST
+    path(
+        "level-master/list/",
+        LevelMasterListAPIView.as_view(),
+        name="level-master-list"
+    ),
+
+    # RETRIEVE
+    path(
+        "level-master/retrieve/<int:pk>/",
+        LevelMasterRetrieveAPIView.as_view(),
+        name="level-master-detail"
+    ),
+
+    # UPDATE
+    path(
+        "level-master/update/<int:pk>/",
+        LevelMasterUpdateAPIView.as_view(),
+        name="level-master-update"
+    ),
+
+    # DELETE
+    path(
+        "level-master/delete/<int:pk>/",
+        LevelMasterDeleteAPIView.as_view(),
+        name="level-master-delete"
     ),
 
 ]
