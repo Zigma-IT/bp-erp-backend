@@ -38,7 +38,7 @@ PO_DISCOUNT_TYPE_CHOICES = (
 
 
 def _masters_db_alias():
-    return "masters_db" if "masters_db" in connections.databases else "default"
+    return "masters_db1"
 
 
 def _as_decimal(value):
@@ -288,6 +288,8 @@ class RateOrderSerializer(serializers.ModelSerializer):
         required=False,
         write_only=True,
     )
+    company_name = serializers.CharField(source="company.name", read_only=True)
+    project_name = serializers.CharField(source="project.name", read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     item_count = serializers.SerializerMethodField()
     documents = RateOrderDocumentSerializer(many=True, read_only=True)
@@ -297,6 +299,10 @@ class RateOrderSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "unique_id",
+            "company",
+            "company_name",
+            "project",
+            "project_name",
             "supplier",
             "supplier_name",
             "status",
@@ -308,14 +314,36 @@ class RateOrderSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "unique_id",
+            "company_name",
+            "project_name",
             "supplier_name",
             "created_at",
             "item_count",
             "documents",
         ]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        db_alias = _masters_db_alias()
+        field_querysets = {
+            "company": CompanyMaster.objects.using(db_alias).filter(is_active=True),
+            "project": ProjectMaster.objects.using(db_alias).filter(is_active=True),
+        }
+        for field_name, queryset in field_querysets.items():
+            field = self.fields.get(field_name)
+            if field is not None and hasattr(field, "queryset"):
+                field.queryset = queryset
+
     def validate(self, attrs):
         items = attrs.get("items_data")
+        company = attrs.get("company") or getattr(self.instance, "company", None)
+        project = attrs.get("project") or getattr(self.instance, "project", None)
+
+        if company and project and project.company_id != company.id:
+            raise serializers.ValidationError(
+                {"project": "Selected project does not belong to the selected company."}
+            )
+
         if self.instance is None and not items:
             raise serializers.ValidationError({"items": "At least one rate row is required."})
         if items is not None and not items:

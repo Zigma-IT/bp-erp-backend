@@ -63,7 +63,7 @@ from .serializers import (
 
 
 def _masters_db_alias():
-    return "masters_db" if "masters_db" in connections.databases else "default"
+    return "masters_db1"
 
 
 def _sync_procurement_suppliers_from_master():
@@ -101,7 +101,7 @@ def _sync_procurement_suppliers_from_master():
 
 # Rate order
 class RateOrderViewSet(viewsets.ModelViewSet):
-    queryset = RateOrder.objects.select_related('supplier').order_by('-created_at')
+    queryset = RateOrder.objects.select_related('company', 'project', 'supplier').order_by('-created_at')
     serializer_class = RateOrderSerializer
 
     def get_queryset(self):

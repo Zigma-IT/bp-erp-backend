@@ -29,7 +29,7 @@ from .models import PurchaseExpense
 
 
 def _masters_db_alias():
-    return "masters_db" if "masters_db" in connections.databases else "default"
+    return "masters_db1"
 
 
 def _customer_name_map(customer_ids):

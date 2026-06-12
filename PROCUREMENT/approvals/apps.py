@@ -26,7 +26,7 @@ class ApprovalsConfig(AppConfig):
         
         try:
             # Get all users from masters_db
-            with connections['masters_db'].cursor() as cursor:
+            with connections['masters_db1'].cursor() as cursor:
                 cursor.execute(
                     "SELECT id, username, email, password, is_staff, is_superuser, is_active, date_joined FROM auth_user"
                 )

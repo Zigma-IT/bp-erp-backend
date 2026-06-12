@@ -22,7 +22,7 @@ from purchase_master.models import UnitMaster
 
 
 def _masters_db_alias():
-    return "masters_db" if "masters_db" in connections.databases else "default"
+    return "masters_db1"
 
 
 def _as_decimal(value):

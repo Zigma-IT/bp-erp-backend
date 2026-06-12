@@ -21,7 +21,7 @@ class PurchaseEntrysConfig(AppConfig):
         
         try:
             # Sync auth users
-            with connections['masters_db'].cursor() as cursor:
+            with connections['masters_db1'].cursor() as cursor:
                 cursor.execute(
                     "SELECT id, username, email, password, is_staff, is_superuser, is_active, date_joined FROM auth_user"
                 )
@@ -48,7 +48,7 @@ class PurchaseEntrysConfig(AppConfig):
                     connections['procurement_db'].commit()
             
             # Sync auth tokens
-            with connections['masters_db'].cursor() as cursor:
+            with connections['masters_db1'].cursor() as cursor:
                 cursor.execute("SELECT key, user_id, created FROM authtoken_token")
                 tokens_data = cursor.fetchall()
             

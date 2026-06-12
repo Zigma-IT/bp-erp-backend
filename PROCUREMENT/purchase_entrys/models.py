@@ -29,6 +29,21 @@ class RateOrder(UniqueIDMixin):
 
     supplier = models.ForeignKey('Supplier', on_delete=models.CASCADE)
 
+    company = models.ForeignKey(
+        CompanyMaster,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="rate_orders",
+    )
+    project = models.ForeignKey(
+        ProjectMaster,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="rate_orders",
+    )
+
     # Line rows are stored on the header so procurement no longer needs a
     # separate rate-order line table.
     items_data = models.JSONField(default=list, blank=True)
