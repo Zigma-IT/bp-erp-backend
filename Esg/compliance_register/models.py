@@ -287,7 +287,8 @@ class ESGComplianceHistory(models.Model):
         ordering = ["-id"]
 
     def __str__(self):
-        return f"{self.compliance_entry.unique_id}" 
+        return f"{self.compliance_entry.unique_id}"
+
 
 class ESGComplianceStateLog(models.Model):
 
