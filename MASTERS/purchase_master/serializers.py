@@ -59,6 +59,8 @@ class CreateBOMSerializer(serializers.Serializer):
             ProductCreation.objects.get(id=value)
         except ProductCreation.DoesNotExist:
             raise serializers.ValidationError("Product not found")
+        if StandardBOM.objects.filter(product_id=value).exists():
+            raise serializers.ValidationError("This product already has a Standard BOM")
         return value
 
     def validate_items(self, value):
@@ -79,4 +81,3 @@ class CreateBOMSerializer(serializers.Serializer):
                 raise serializers.ValidationError(f"Item {idx}: Item with ID {item['item_id']} not found")
         
         return value
-

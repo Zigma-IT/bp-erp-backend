@@ -5,7 +5,7 @@ from typing import Any, cast
 
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
-from django.db import connections
+from django.db import connections, transaction
 from django.db.models import Q
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
@@ -1016,12 +1016,10 @@ def create_bom(request):
                 "message": f"Product with ID {product_id} not found"
             }, status=status.HTTP_404_NOT_FOUND)
 
-        # Create BOM header
-        bom = StandardBOM.objects.create(product=product)
+        with transaction.atomic():
+            bom = StandardBOM.objects.create(product=product)
 
-        # Create BOM items
-        for row in items:
-            try:
+            for row in items:
                 item = ItemMaster.objects.get(id=row.get('item_id'))
                 StandardBOMItem.objects.create(
                     bom=bom,
@@ -1031,12 +1029,6 @@ def create_bom(request):
                     remarks=row.get('remarks', ''),
                     is_active=row.get('is_active', True)
                 )
-            except ItemMaster.DoesNotExist:
-                bom.delete()  # Rollback if item not found
-                return Response({
-                    "status": False,
-                    "message": f"Item with ID {row.get('item_id')} not found"
-                }, status=status.HTTP_404_NOT_FOUND)
 
         # Return created BOM with details
         bom_serializer = StandardBOMSerializer(bom)
@@ -1080,10 +1072,25 @@ def view_bom(request, pk):
 # UPDATE BOM ITEMS
 @api_view(['PUT'])
 def update_bom(request, pk):
-    """Update BOM items"""
+    """Update BOM product and items"""
     try:
         bom = StandardBOM.objects.get(id=pk)
+        product_id = request.data.get('product_id', bom.product_id)
         items = cast(list[dict[str, Any]], request.data.get('items', []))
+
+        try:
+            product = ProductCreation.objects.get(id=product_id)
+        except (ProductCreation.DoesNotExist, TypeError, ValueError):
+            return Response({
+                "status": False,
+                "message": f"Product with ID {product_id} not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        if StandardBOM.objects.filter(product=product).exclude(id=bom.id).exists():
+            return Response({
+                "status": False,
+                "message": "This product already has a Standard BOM"
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         if not items:
             return Response({
@@ -1091,12 +1098,21 @@ def update_bom(request, pk):
                 "message": "Items are required"
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Delete existing items
-        StandardBOMItem.objects.filter(bom=bom).delete()
-
-        # Create new items
         for row in items:
             try:
+                ItemMaster.objects.get(id=row.get('item_id'))
+            except (ItemMaster.DoesNotExist, TypeError, ValueError):
+                return Response({
+                    "status": False,
+                    "message": f"Item with ID {row.get('item_id')} not found"
+                }, status=status.HTTP_404_NOT_FOUND)
+
+        with transaction.atomic():
+            bom.product = product
+            bom.save(update_fields=["product"])
+            StandardBOMItem.objects.filter(bom=bom).delete()
+
+            for row in items:
                 item = ItemMaster.objects.get(id=row.get('item_id'))
                 StandardBOMItem.objects.create(
                     bom=bom,
@@ -1106,11 +1122,6 @@ def update_bom(request, pk):
                     remarks=row.get('remarks', ''),
                     is_active=row.get('is_active', True)
                 )
-            except ItemMaster.DoesNotExist:
-                return Response({
-                    "status": False,
-                    "message": f"Item with ID {row.get('item_id')} not found"
-                }, status=status.HTTP_404_NOT_FOUND)
 
         bom_serializer = StandardBOMSerializer(bom)
         return Response({
