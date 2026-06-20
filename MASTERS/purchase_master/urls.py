@@ -1,14 +1,40 @@
 """Purchase master URL configuration with a browsable DRF index."""
 
-from django.urls import include, path
+from django.urls import path
 from collections import OrderedDict
+
 from MASTERS.api_router import ExtendedDefaultRouter
 
 from . import views
 
+from .views import (
+
+    ExpenseCategoryCreateAPIView,
+    ExpenseCategoryListAPIView,
+    ExpenseCategoryDetailAPIView,
+    ExpenseCategoryUpdateAPIView,
+    ExpenseCategoryDeleteAPIView,
+    ExpenseSubCategoryCreateAPIView,
+    ExpenseSubCategoryListAPIView,
+    ExpenseSubCategoryDetailAPIView,
+    ExpenseSubCategoryUpdateAPIView,
+    ExpenseSubCategoryDeleteAPIView,
+    CustomerCategoryCreateAPIView,
+    CustomerCategoryListAPIView,
+    CustomerCategoryDetailAPIView,
+    CustomerCategoryUpdateAPIView,
+    CustomerCategoryDeleteAPIView,
+    PaymentCategoryCreateAPIView,
+    PaymentCategoryListAPIView,
+    PaymentCategoryDetailAPIView,
+    PaymentCategoryUpdateAPIView,
+    PaymentCategoryDeleteAPIView,
+
+)
 
 router = ExtendedDefaultRouter()
-router.extra_api_root_dict = OrderedDict ({
+
+router.extra_api_root_dict = OrderedDict({
     "units": "unit-list",
     "units-create": "unit-create",
     "item-groups": "item-group-list",
@@ -28,11 +54,17 @@ router.extra_api_root_dict = OrderedDict ({
     "products-create": "product-create",
     "products-company-dropdown": "product-company-dropdown",
     "products-group-dropdown": "product-group-dropdown",
+    "products-group-dropdown-create": "product-group-dropdown-create",
     "products-sub-group-dropdown": "product-sub-group-dropdown",
+    "products-sub-group-dropdown-create": "product-sub-group-dropdown-create",
     "boms": "bom-list",
     "boms-create": "bom-create",
     "products-dropdown": "product-dropdown",
     "items-dropdown": "item-dropdown",
+
+    # Expense Category
+    "expense-category-list": "expense-category-list",
+    "expense-category-create": "expense-category-create",
 })
 
 # Unit endpoints
@@ -70,12 +102,14 @@ category_patterns = [
     path('categories/sub-group-dropdown/', views.sub_group_dropdown, name='category-sub-group-dropdown'),
 ]
 
-# Item Names/codes endpoints
+# Item endpoints
 item_patterns = [
     path('items/', views.item_list, name='item-list'),
     path('items/create/', views.create_item, name='item-create'),
-    path('items/<int:pk>/', views.update_item, name='item-update'),
+    path('items/<int:pk>/', views.update_item, name='item-detail'),
     path('items/<int:pk>/toggle/', views.toggle_item, name='item-toggle'),
+    path('items/export/', views.export_items, name='item-export'),
+    path('items/import/', views.import_items, name='item-import'),
     path('items/group-dropdown/', views.group_dropdown, name='item-group-dropdown'),
     path('items/sub-group-dropdown/', views.sub_group_dropdown, name='item-sub-group-dropdown'),
 ]
@@ -87,8 +121,13 @@ product_patterns = [
     path('products/<int:pk>/', views.update_product, name='product-update'),
     path('products/<int:pk>/toggle/', views.toggle_product, name='product-toggle'),
     path('products/company-dropdown/', views.company_dropdown, name='product-company-dropdown'),
-    path('products/group-dropdown/', views.group_dropdown, name='product-group-dropdown'),
-    path('products/sub-group-dropdown/', views.sub_group_dropdown, name='product-sub-group-dropdown'),
+    path('products/group-dropdown/', views.product_group_dropdown, name='product-group-dropdown'),
+    path('products/group-dropdown/create/', views.create_product_group, name='product-group-dropdown-create'),
+    path('products/sub-group-dropdown/', views.product_sub_group_dropdown, name='product-sub-group-dropdown'),
+    path('products/sub-group-dropdown/create/', views.create_product_sub_group, name='product-sub-group-dropdown-create'),
+    path('products/groups/', views.product_group_management, name='product-group-management'),
+    path('products/groups/<int:pk>/delete/', views.delete_product_group, name='product-group-delete'),
+    path('products/sub-groups/<int:pk>/delete/', views.delete_product_sub_group, name='product-sub-group-delete'),
 ]
 
 # BOM endpoints
@@ -102,7 +141,126 @@ bom_patterns = [
     path('items-dropdown/', views.item_dropdown, name='item-dropdown'),
 ]
 
-# Combine all patterns
+# Expense Category endpoints
+expense_category_patterns = [
+    path(
+        "expense-category/create/",
+        ExpenseCategoryCreateAPIView.as_view(),
+        name="expense-category-create"
+    ),
+    path(
+        "expense-category/list/",
+        ExpenseCategoryListAPIView.as_view(),
+        name="expense-category-list"
+    ),
+    path(
+        "expense-category/<int:pk>/",
+        ExpenseCategoryDetailAPIView.as_view(),
+        name="expense-category-detail"
+    ),
+    path(
+        "expense-category/update/<int:pk>/",
+        ExpenseCategoryUpdateAPIView.as_view(),
+        name="expense-category-update"
+    ),
+    path(
+        "expense-category/delete/<int:pk>/",
+        ExpenseCategoryDeleteAPIView.as_view(),
+        name="expense-category-delete"
+    ),
+
+
+    path(
+        "expense-sub-category/create/",
+        ExpenseSubCategoryCreateAPIView.as_view(),
+        name="expense-sub-category-create"
+    ),
+
+    path(
+        "expense-sub-category/list/",
+        ExpenseSubCategoryListAPIView.as_view(),
+        name="expense-sub-category-list"
+    ),
+
+    path(
+        "expense-sub-category/<int:pk>/",
+        ExpenseSubCategoryDetailAPIView.as_view(),
+        name="expense-sub-category-detail"
+    ),
+
+    path(
+        "expense-sub-category/update/<int:pk>/",
+        ExpenseSubCategoryUpdateAPIView.as_view(),
+        name="expense-sub-category-update"
+    ),
+
+    path(
+        "expense-sub-category/delete/<int:pk>/",
+        ExpenseSubCategoryDeleteAPIView.as_view(),
+        name="expense-sub-category-delete"
+    ),
+
+
+    path(
+        "customer-category/create/",
+        CustomerCategoryCreateAPIView.as_view(),
+        name="customer-category-create"
+    ),
+
+    path(
+        "customer-category/list/",
+        CustomerCategoryListAPIView.as_view(),
+        name="customer-category-list"
+    ),
+
+    path(
+        "customer-category/<int:pk>/",
+        CustomerCategoryDetailAPIView.as_view(),
+        name="customer-category-detail"
+    ),
+
+    path(
+        "customer-category/update/<int:pk>/",
+        CustomerCategoryUpdateAPIView.as_view(),
+        name="customer-category-update"
+    ),
+
+    path(
+        "customer-category/delete/<int:pk>/",
+        CustomerCategoryDeleteAPIView.as_view(),
+        name="customer-category-delete"
+    ),
+       path(
+        "payment-category/create/",
+        PaymentCategoryCreateAPIView.as_view(),
+        name="payment-category-create"
+    ),
+
+    path(
+        "payment-category/list/",
+        PaymentCategoryListAPIView.as_view(),
+        name="payment-category-list"
+    ),
+
+    path(
+        "payment-category/<int:pk>/",
+        PaymentCategoryDetailAPIView.as_view(),
+        name="payment-category-detail"
+    ),
+
+    path(
+        "payment-category/update/<int:pk>/",
+        PaymentCategoryUpdateAPIView.as_view(),
+        name="payment-category-update"
+    ),
+
+    path(
+        "payment-category/delete/<int:pk>/",
+        PaymentCategoryDeleteAPIView.as_view(),
+        name="payment-category-delete"
+    ),
+]
+
 urlpatterns = [
     *unit_patterns,
     *item_group_patterns,
@@ -111,4 +269,5 @@ urlpatterns = [
     *item_patterns,
     *product_patterns,
     *bom_patterns,
+    *expense_category_patterns,
 ]

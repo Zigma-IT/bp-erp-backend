@@ -89,4 +89,5 @@ websockets==15.0.1
 wheel==0.46.1
 xdg==5
 xlrd==2.0.1
+openpyxl==3.1.2
 yt-dlp==2025.4.30

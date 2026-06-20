@@ -1,6 +1,6 @@
 # Units - This file defines the serializers for the UnitMaster model in the purchase_master module of the MASTERS app, which is responsible for converting UnitMaster model instances to and from JSON format for API interactions. The UnitSerializer class inherits from ModelSerializer and specifies that all fields of the UnitMaster model should be included in the serialization process, allowing for easy handling of unit-related data in API requests and responses.
 from rest_framework import serializers
-from .models import ItemGroup, ItemMaster, ProductCreation, StandardBOM, StandardBOMItem, UnitMaster
+from .models import ItemGroup, ItemMaster, ProductCreation, StandardBOM, StandardBOMItem, UnitMaster , ExpenseCategory , ExpenseSubCategory , CustomerCategory , PaymentCategory
 
 class UnitSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(source="pk", read_only=True)
@@ -30,29 +30,69 @@ class ItemGroupSerializer(serializers.ModelSerializer):
 class StandardBOMItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.item_name', read_only=True)
     item_code = serializers.CharField(source='item.item_code', read_only=True)
+    group = serializers.IntegerField(source='item.group_id', read_only=True)
+    sub_group = serializers.IntegerField(source='item.sub_group_id', read_only=True)
+    category = serializers.IntegerField(source='item.category_id', read_only=True)
 
     class Meta:
         model = StandardBOMItem
-        fields = ['id', 'item', 'item_name', 'item_code', 'qty', 'unit', 'remarks', 'is_active']
+        fields = ['id', 'item', 'item_name', 'item_code', 'group', 'sub_group', 'category', 'qty', 'unit', 'remarks', 'is_active']
 
 
 class StandardBOMSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source='product.product_name', read_only=True)
+    product_name = serializers.SerializerMethodField()
+    semi_finished_name = serializers.SerializerMethodField()
+    material_type = serializers.SerializerMethodField()
     items = StandardBOMItemSerializer(many=True, read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = StandardBOM
-        fields = ['id', 'product', 'product_name', 'items', 'created_at']
+        fields = ['id', 'product', 'product_name', 'semi_finished', 'semi_finished_name', 'material_type', 'items', 'created_at']
+
+    def get_product_name(self, obj):
+        return obj.product.product_name if obj.product_id and obj.product else None
+
+    def get_semi_finished_name(self, obj):
+        return obj.semi_finished.item_name if obj.semi_finished_id and obj.semi_finished else None
+
+    def get_material_type(self, obj):
+        return "Semi-Finished" if obj.semi_finished_id else "Product"
 
 
 class CreateBOMSerializer(serializers.Serializer):
     """Serializer for creating BOM with validation"""
-    product_id = serializers.IntegerField(required=True)
+    product_id = serializers.IntegerField(required=False)
+    semi_finished_id = serializers.IntegerField(required=False)
     items = serializers.ListField(
         child=serializers.DictField(),
         required=True
     )
+
+    def validate(self, attrs):
+        product_id = attrs.get('product_id')
+        semi_finished_id = attrs.get('semi_finished_id')
+
+        if bool(product_id) == bool(semi_finished_id):
+            raise serializers.ValidationError("Select either product or semi-finished item")
+
+        if product_id is not None:
+            try:
+                ProductCreation.objects.get(id=product_id)
+            except ProductCreation.DoesNotExist:
+                raise serializers.ValidationError({"product_id": "Product not found"})
+            if StandardBOM.objects.filter(product_id=product_id).exists():
+                raise serializers.ValidationError({"product_id": "This product already has a Standard BOM"})
+
+        if semi_finished_id is not None:
+            try:
+                ItemMaster.objects.get(id=semi_finished_id)
+            except ItemMaster.DoesNotExist:
+                raise serializers.ValidationError({"semi_finished_id": "Semi-finished item not found"})
+            if StandardBOM.objects.filter(semi_finished_id=semi_finished_id).exists():
+                raise serializers.ValidationError({"semi_finished_id": "This semi-finished item already has a Standard BOM"})
+
+        return attrs
 
     def validate_product_id(self, value):
         try:
@@ -81,3 +121,33 @@ class CreateBOMSerializer(serializers.Serializer):
                 raise serializers.ValidationError(f"Item {idx}: Item with ID {item['item_id']} not found")
         
         return value
+
+class ExpenseCategorySerializer(
+    serializers.ModelSerializer
+):
+
+    class Meta:
+        model = ExpenseCategory
+        fields = "__all__"
+
+
+class ExpenseSubCategorySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = ExpenseSubCategory
+        fields = "__all__"
+
+
+    
+class CustomerCategorySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = CustomerCategory
+        fields = "__all__"
+
+
+class PaymentCategorySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = PaymentCategory
+        fields = "__all__"
