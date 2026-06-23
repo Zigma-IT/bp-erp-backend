@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     'common_master',
     'purchase_master',
     'purchase_entrys',
+    'purchase_expense',
     'sales',
     'login_home',
     'approvals',

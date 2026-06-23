@@ -292,6 +292,8 @@ class RateOrderSerializer(serializers.ModelSerializer):
     project_name = serializers.CharField(source="project.name", read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     item_count = serializers.SerializerMethodField()
+    approved_by_name = serializers.SerializerMethodField()
+    rejected_by_name = serializers.SerializerMethodField()
     documents = RateOrderDocumentSerializer(many=True, read_only=True)
 
     class Meta:
@@ -306,6 +308,12 @@ class RateOrderSerializer(serializers.ModelSerializer):
             "supplier",
             "supplier_name",
             "status",
+            "approval_status",
+            "approved_by_name",
+            "approved_at",
+            "rejected_by_name",
+            "rejected_at",
+            "approval_remarks",
             "created_at",
             "item_count",
             "items",
@@ -317,6 +325,12 @@ class RateOrderSerializer(serializers.ModelSerializer):
             "company_name",
             "project_name",
             "supplier_name",
+            "approval_status",
+            "approved_by_name",
+            "approved_at",
+            "rejected_by_name",
+            "rejected_at",
+            "approval_remarks",
             "created_at",
             "item_count",
             "documents",
@@ -385,6 +399,12 @@ class RateOrderSerializer(serializers.ModelSerializer):
 
     def get_item_count(self, obj):
         return len(obj.items_data) if isinstance(obj.items_data, list) else 0
+
+    def get_approved_by_name(self, obj):
+        return obj.approved_by.get_username() if obj.approved_by_id else ""
+
+    def get_rejected_by_name(self, obj):
+        return obj.rejected_by.get_username() if obj.rejected_by_id else ""
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -935,6 +955,7 @@ class PurchaseRequisitionLineSerializer(serializers.Serializer):
     uom = serializers.CharField(max_length=50)
     qty = serializers.DecimalField(max_digits=10, decimal_places=2)
     remarks = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    delivery_date = serializers.DateField(required=False, allow_null=True)
 
     def validate(self, attrs):
         if attrs["qty"] <= 0:
@@ -1038,6 +1059,7 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
     def _normalise_items(self, items_data):
         rows = []
         for index, item in enumerate(items_data, start=1):
+            delivery = item.get("delivery_date")
             rows.append(
                 {
                     "id": _line_id(item, index),
@@ -1046,6 +1068,7 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
                     "uom": item["uom"],
                     "qty": _decimal_to_json(item["qty"]),
                     "remarks": item.get("remarks") or "",
+                    "delivery_date": str(delivery) if delivery else None,
                 }
             )
         return rows

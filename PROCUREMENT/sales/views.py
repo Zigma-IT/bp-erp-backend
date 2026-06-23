@@ -5,7 +5,8 @@ from django.shortcuts import get_object_or_404
 from django.db.models import F, Sum
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, parser_classes
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
 from PROCUREMENT.schema_utils import (
@@ -13,16 +14,21 @@ from PROCUREMENT.schema_utils import (
     query_int_parameter,
     query_str_parameter,
 )
-from .models import SalesOrder, SalesInvoice, Customer
+from .models import SalesOrder, SalesInvoice, Customer, OrderedBOM, OrderedBOMDocument
 from .serializers import (
     PurchaseExpenseListRowSerializer,
     PurchaseExpenseSerializer,
     SalesOrderListRowSerializer,
     SalesOrderSerializer,
     SalesInvoiceListRowSerializer,
+    SalesInvoiceDocumentCreateSerializer,
+    SalesInvoiceDocumentSerializer,
     SalesInvoiceSerializer,
+    OrderedBOMDocumentCreateSerializer,
+    OrderedBOMDocumentSerializer,
+    OrderedBOMSerializer,
 )
-from purchase_master.models import ItemGroup, ProductCreation as ProductMaster, SubGroup, UnitMaster
+from purchase_master.models import CustomerCategory, ItemGroup, ProductCreation as ProductMaster, SubGroup, UnitMaster, ExpenseCategory, ExpenseSubCategory
 from common_master.models import Company as CompanyMaster, Project as ProjectMaster, Tax as TaxMaster, CustomerProfile as CustomerMaster
 from purchase_entrys.models import Supplier
 from .models import PurchaseExpense
@@ -36,11 +42,27 @@ def _customer_name_map(customer_ids):
     if not customer_ids:
         return {}
 
+    customer_names = {}
     queryset = CustomerMaster.objects.using(_masters_db_alias()).filter(
         pk__in=customer_ids,
         is_delete=False,
     )
-    return {customer.pk: customer.customer_name for customer in queryset}
+    customer_names.update({customer.pk: customer.customer_name for customer in queryset})
+
+    missing_ids = set(customer_ids) - set(customer_names)
+    if missing_ids:
+        category_queryset = CustomerCategory.objects.using(_masters_db_alias()).filter(
+            pk__in=missing_ids,
+            is_delete=False,
+        )
+        customer_names.update(
+            {
+                category.pk: category.customer_category
+                for category in category_queryset
+            }
+        )
+
+    return customer_names
 
 
 SALES_ORDER_FILTER_PARAMETERS = [
@@ -137,6 +159,91 @@ def sales_order_list(request):
         )
 
     return Response({"data": result})
+
+
+@extend_schema(
+    operation_id="api_sales_ordered_bom_list",
+    responses={200: {"data": OrderedBOMSerializer(many=True)}},
+    methods=["GET"],
+)
+@extend_schema(
+    operation_id="api_sales_ordered_bom_create",
+    request=OrderedBOMSerializer,
+    responses={201: OrderedBOMSerializer},
+    methods=["POST"],
+)
+@api_view(["GET", "POST"])
+def ordered_bom_list(request):
+    if request.method == "POST":
+        serializer = OrderedBOMSerializer(data=request.data)
+        if serializer.is_valid():
+            bom = serializer.save()
+            return Response(OrderedBOMSerializer(bom).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    queryset = (
+        OrderedBOM.objects.select_related("company", "sales_order")
+        .order_by("-created_at", "-id")
+    )
+    serializer = OrderedBOMSerializer(queryset, many=True)
+    return Response({"data": serializer.data})
+
+
+@extend_schema(
+    operation_id="api_sales_ordered_bom_detail",
+    responses=OrderedBOMSerializer,
+    methods=["GET"],
+)
+@extend_schema(
+    operation_id="api_sales_ordered_bom_update",
+    request=OrderedBOMSerializer,
+    responses=OrderedBOMSerializer,
+    methods=["PUT", "PATCH"],
+)
+@extend_schema(
+    operation_id="api_sales_ordered_bom_delete",
+    responses={204: None},
+    methods=["DELETE"],
+)
+@api_view(["GET", "PUT", "PATCH", "DELETE"])
+def ordered_bom_detail(request, pk):
+    bom = get_object_or_404(OrderedBOM.objects.select_related("company", "sales_order"), pk=pk)
+
+    if request.method == "GET":
+        return Response(OrderedBOMSerializer(bom).data)
+
+    if request.method == "DELETE":
+        bom.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    serializer = OrderedBOMSerializer(bom, data=request.data, partial=request.method == "PATCH")
+    if serializer.is_valid():
+        serializer.save()
+        return Response(OrderedBOMSerializer(bom).data)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET", "POST"])
+@parser_classes([MultiPartParser, FormParser])
+def ordered_bom_documents(request, pk):
+    bom = get_object_or_404(OrderedBOM.objects.select_related("company", "sales_order"), pk=pk)
+
+    if request.method == "GET":
+        serializer = OrderedBOMDocumentSerializer(bom.documents.all(), many=True)
+        return Response(serializer.data)
+
+    serializer = OrderedBOMDocumentCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    document = serializer.save(bom=bom)
+    return Response(OrderedBOMDocumentSerializer(document).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["DELETE"])
+def ordered_bom_document_delete(request, pk, document_id):
+    bom = get_object_or_404(OrderedBOM.objects.select_related("company", "sales_order"), pk=pk)
+    document = get_object_or_404(bom.documents.all(), pk=document_id)
+    document.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(
@@ -392,6 +499,29 @@ def sales_invoice_detail(request, pk):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(["GET", "POST"])
+@parser_classes([MultiPartParser, FormParser])
+def sales_invoice_documents(request, pk):
+    sales_invoice = get_object_or_404(SalesInvoice, pk=pk)
+
+    if request.method == "GET":
+        serializer = SalesInvoiceDocumentSerializer(sales_invoice.documents.all(), many=True)
+        return Response(serializer.data)
+
+    serializer = SalesInvoiceDocumentCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    document = serializer.save(sales_invoice=sales_invoice)
+    return Response(SalesInvoiceDocumentSerializer(document).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["DELETE"])
+def sales_invoice_document_delete(request, pk, document_id):
+    sales_invoice = get_object_or_404(SalesInvoice, pk=pk)
+    document = get_object_or_404(sales_invoice.documents.all(), pk=document_id)
+    document.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 @extend_schema(
     operation_id="api_sales_purchase_expense_list",
     parameters=PURCHASE_EXPENSE_FILTER_PARAMETERS,
@@ -418,14 +548,14 @@ def purchase_expense_list(request):
         "id",
         "expense_date",
         "expense_number",
-        "payment_type",
         "status",
         "supplier_manual_entry",
         "manual_supplier_name",
         company_name=F("company__name"),
         project_name=F("project__name"),
-        category_name=F("category__group_name"),
-        sub_category_name=F("sub_category__sub_group_name"),
+        category_name=F("category__category_name"),
+        sub_category_name=F("sub_category__sub_category_name"),
+        payment_type_name=F("payment_type__payment_name"),
         supplier_name=F("supplier__name"),
     )
 
@@ -446,7 +576,7 @@ def purchase_expense_list(request):
                 "project_name": row["project_name"] or "",
                 "category_name": row["category_name"] or "",
                 "sub_category_name": row["sub_category_name"] or "",
-                "payment_type": row["payment_type"],
+                "payment_type": row["payment_type_name"] or "",
                 "supplier_name": row["manual_supplier_name"]
                 if row["supplier_manual_entry"] and row["manual_supplier_name"]
                 else (row["supplier_name"] or ""),
@@ -524,14 +654,22 @@ def companies_dropdown(request):
 
 @api_view(["GET"])
 def customers_dropdown(request):
-    """Dropdown list of customers"""
+    """Dropdown list of customer categories for sales invoices."""
     customers = (
-        CustomerMaster.objects.using(_masters_db_alias())
+        CustomerCategory.objects.using(_masters_db_alias())
         .filter(is_delete=False, is_active=True)
-        .values_list("id", "customer_name")
-        .order_by("customer_name")
+        .values("customer_category_id", "customer_category")
+        .order_by("customer_category")
     )
-    results = [{"id": customer[0], "name": customer[1]} for customer in customers]
+    results = [
+        {
+            "id": customer["customer_category_id"],
+            "name": customer["customer_category"],
+            "customer_category_id": customer["customer_category_id"],
+            "customer_category": customer["customer_category"],
+        }
+        for customer in customers
+    ]
     return Response({"results": results})
 
 
@@ -557,18 +695,18 @@ def suppliers_dropdown(request):
 
 @api_view(["GET"])
 def categories_dropdown(request):
-    queryset = ItemGroup.objects.filter(is_active=True).order_by("group_name")
-    results = [{"id": category.id, "name": category.group_name} for category in queryset]
+    queryset = ExpenseCategory.objects.filter(is_active=1, is_delete=0).order_by("category_name")
+    results = [{"id": category.id, "name": category.category_name} for category in queryset]
     return Response({"results": results})
 
 
 @api_view(["GET"])
 def sub_categories_dropdown(request):
     category_id = request.GET.get("category")
-    queryset = SubGroup.objects.filter(is_active=True).order_by("sub_group_name")
+    queryset = ExpenseSubCategory.objects.filter(is_active=1, is_delete=0).order_by("sub_category_name")
     if category_id:
-        queryset = queryset.filter(group_id=category_id)
-    results = [{"id": sub_category.id, "name": sub_category.sub_group_name} for sub_category in queryset]
+        queryset = queryset.filter(category_id=category_id)
+    results = [{"id": sub_category.id, "name": sub_category.sub_category_name} for sub_category in queryset]
     return Response({"results": results})
 
 

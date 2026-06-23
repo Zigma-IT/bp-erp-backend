@@ -4,10 +4,12 @@ from typing import Any, cast
 
 from django.db import connections
 from django.db.models import F, Q
+from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, parser_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
@@ -100,6 +102,44 @@ def _sync_procurement_suppliers_from_master():
         )
 
 # Rate order
+RATE_ORDER_APPROVER_USERNAME = "ram"
+RATE_ORDER_APPROVER_USER_TYPE = "purchase head"
+
+
+def _rate_order_user_type_name(username):
+    if not username:
+        return ""
+
+    try:
+        with connections[_masters_db_alias()].cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT ut.name
+                FROM admin_master_usercreation uc
+                LEFT JOIN admin_master_usertype ut ON uc.user_type_id = ut.id
+                WHERE LOWER(uc.username) = LOWER(%s)
+                LIMIT 1
+                """,
+                [username],
+            )
+            row = cursor.fetchone()
+    except Exception:
+        return ""
+
+    return str(row[0]).strip().lower() if row and row[0] else ""
+
+
+def _is_rate_order_approver(user):
+    username = user.get_username().strip() if user and user.is_authenticated else ""
+    return bool(
+        username
+        and (
+            username.lower() == RATE_ORDER_APPROVER_USERNAME
+            or _rate_order_user_type_name(username) == RATE_ORDER_APPROVER_USER_TYPE
+        )
+    )
+
+
 class RateOrderViewSet(viewsets.ModelViewSet):
     queryset = RateOrder.objects.select_related('company', 'project', 'supplier').order_by('-created_at')
     serializer_class = RateOrderSerializer
@@ -109,12 +149,16 @@ class RateOrderViewSet(viewsets.ModelViewSet):
 
         supplier = self.request.GET.get('supplier')
         status = self.request.GET.get('status')
+        approval_status = self.request.GET.get('approval_status')
 
         if supplier:
             qs = qs.filter(supplier_id=supplier)
 
         if status:
             qs = qs.filter(status=status)
+
+        if approval_status:
+            qs = qs.filter(approval_status=approval_status)
 
         return qs
 
@@ -126,6 +170,60 @@ class RateOrderViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(rate_order)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='approve')
+    def approve(self, request, pk=None):
+        if not _is_rate_order_approver(request.user):
+            return Response(
+                {"detail": "Only Purchase Head users can approve rate orders."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        rate_order = self.get_object()
+        rate_order.approval_status = RateOrder.ApprovalStatus.APPROVED
+        rate_order.approved_by = request.user
+        rate_order.approved_at = timezone.now()
+        rate_order.rejected_by = None
+        rate_order.rejected_at = None
+        rate_order.approval_remarks = request.data.get("remarks", "") or ""
+        rate_order.save(
+            update_fields=[
+                "approval_status",
+                "approved_by",
+                "approved_at",
+                "rejected_by",
+                "rejected_at",
+                "approval_remarks",
+            ]
+        )
+        return Response(self.get_serializer(rate_order).data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='reject')
+    def reject(self, request, pk=None):
+        if not _is_rate_order_approver(request.user):
+            return Response(
+                {"detail": "Only Purchase Head users can reject rate orders."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        rate_order = self.get_object()
+        rate_order.approval_status = RateOrder.ApprovalStatus.REJECTED
+        rate_order.rejected_by = request.user
+        rate_order.rejected_at = timezone.now()
+        rate_order.approved_by = None
+        rate_order.approved_at = None
+        rate_order.approval_remarks = request.data.get("remarks", "") or ""
+        rate_order.save(
+            update_fields=[
+                "approval_status",
+                "approved_by",
+                "approved_at",
+                "rejected_by",
+                "rejected_at",
+                "approval_remarks",
+            ]
+        )
+        return Response(self.get_serializer(rate_order).data)
+
     @action(
         detail=True,
         methods=["get", "post"],
@@ -136,13 +234,15 @@ class RateOrderViewSet(viewsets.ModelViewSet):
         rate_order = self.get_object()
 
         if request.method == "GET":
-            serializer = RateOrderDocumentSerializer(rate_order.documents.all(), many=True)
+            serializer = RateOrderDocumentSerializer(
+                rate_order.documents.all(), many=True, context={"request": request}
+            )
             return Response(serializer.data)
 
         serializer = RateOrderDocumentCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         document = serializer.save(rate_order=rate_order)
-        response_serializer = RateOrderDocumentSerializer(document)
+        response_serializer = RateOrderDocumentSerializer(document, context={"request": request})
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["delete"], url_path=r"documents/(?P<document_id>[^/.]+)")
@@ -286,6 +386,7 @@ def _serialize_purchase_order_rows(purchase_orders, meta):
                 "po_number": purchase_order.po_number,
                 "company_name": purchase_order.company.name,
                 "project_name": purchase_order.project.name,
+                "supplier_id": purchase_order.supplier.id,
                 "supplier_name": purchase_order.supplier.name,
                 "entry_date": purchase_order.entry_date,
                 "net_amount": float(purchase_order.total_basic_value),
@@ -706,6 +807,38 @@ def update_purchase_order_approval(request, pk, level):
 
 
 # Purchase Requisition
+@api_view(["GET"])
+def purchase_requisition_sublist(request):
+    """Return flat PR items filtered by company + project (for PO form PR picker)."""
+    company_id = request.GET.get("company")
+    project_id = request.GET.get("project")
+
+    if not company_id or not project_id:
+        return Response({"data": []})
+
+    queryset = PurchaseRequisition.objects.filter(
+        company_id=company_id,
+        project_id=project_id,
+    ).order_by("-requisition_date", "-id")
+
+    rows = []
+    for pr in queryset:
+        items_data = pr.items_data if isinstance(pr.items_data, list) else []
+        for item in items_data:
+            rows.append({
+                "pr_id": pr.id,
+                "pr_number": pr.pr_number,
+                "product_name": item.get("product_name", ""),
+                "description": item.get("description", item.get("product_name", "")),
+                "qty": str(item.get("qty", "")),
+                "uom": item.get("uom", ""),
+                "remarks": item.get("remarks", ""),
+                "delivery_date": item.get("delivery_date", ""),
+            })
+
+    return Response({"data": rows})
+
+
 @extend_schema(
     operation_id="api_purchase_entrys_purchase_requisition_list",
     parameters=PURCHASE_REQUISITION_FILTER_PARAMETERS,
@@ -768,14 +901,29 @@ def create_purchase_requisition(request):
     operation_id="api_purchase_entrys_purchase_requisition_detail",
     responses=PurchaseRequisitionSerializer,
 )
-@api_view(["GET"])
+@api_view(["GET", "PUT", "PATCH", "DELETE"])
 def purchase_requisition_detail(request, pk):
     purchase_requisition = get_object_or_404(
         PurchaseRequisition.objects.select_related("company", "project").prefetch_related("documents"),
         pk=pk,
     )
-    serializer = PurchaseRequisitionSerializer(purchase_requisition)
-    return Response(serializer.data)
+
+    if request.method == "GET":
+        serializer = PurchaseRequisitionSerializer(purchase_requisition)
+        return Response(serializer.data)
+
+    if request.method == "DELETE":
+        purchase_requisition.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    partial = request.method == "PATCH"
+    serializer = PurchaseRequisitionSerializer(
+        purchase_requisition, data=request.data, partial=partial
+    )
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @extend_schema(

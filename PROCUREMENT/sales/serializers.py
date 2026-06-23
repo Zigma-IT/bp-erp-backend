@@ -11,12 +11,16 @@ from .models import (
     PurchaseExpense,
     PurchaseExpenseItem,
     Customer,
+    OrderedBOM,
+    OrderedBOMDocument,
     SalesOrder,
     SalesInvoice,
+    SalesInvoiceDocument,
     SalesInvoiceItem,
 )
 from common_master.models import Company as CompanyMaster
 from common_master.models import CustomerProfile as CustomerMaster
+from purchase_master.models import CustomerCategory
 from purchase_master.models import ProductCreation as ProductMaster
 from purchase_master.models import UnitMaster
 
@@ -73,10 +77,17 @@ def _get_customer(customer_id):
             is_delete=False,
             is_active=True,
         )
-    except CustomerMaster.DoesNotExist as exc:
-        raise serializers.ValidationError(
-            {"customer": f"Invalid customer id '{customer_id}'."}
-        ) from exc
+    except CustomerMaster.DoesNotExist:
+        try:
+            return CustomerCategory.objects.using(_masters_db_alias()).get(
+                pk=customer_id,
+                is_delete=False,
+                is_active=True,
+            )
+        except CustomerCategory.DoesNotExist as exc:
+            raise serializers.ValidationError(
+                {"customer": f"Invalid customer category id '{customer_id}'."}
+            ) from exc
 
 
 # >>>>>>>>>>>>>>>>>>>>>>>>>>> Sales Order >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -268,6 +279,87 @@ class SalesOrderListRowSerializer(serializers.Serializer):
     so_type = serializers.CharField()
     active_status = serializers.CharField()
     approve_status = serializers.CharField()
+
+
+class OrderedBOMDocumentSerializer(serializers.ModelSerializer):
+    file_url = serializers.FileField(source="file", read_only=True)
+
+    class Meta:
+        model = OrderedBOMDocument
+        fields = [
+            "id",
+            "unique_id",
+            "document_type",
+            "document_name",
+            "file",
+            "file_url",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class OrderedBOMDocumentCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderedBOMDocument
+        fields = ["document_type", "document_name", "file"]
+
+    def validate_file(self, value):
+        if value.size <= 0:
+            raise serializers.ValidationError("Please upload a valid file.")
+        return value
+
+
+class OrderedBOMSerializer(serializers.ModelSerializer):
+    company = serializers.PrimaryKeyRelatedField(
+        queryset=CompanyMaster.objects.none(),
+        required=False,
+    )
+    company_name = serializers.CharField(source="company.name", read_only=True)
+    sales_order_no = serializers.CharField(source="sales_order.so_number", read_only=True)
+    so_type = serializers.CharField(source="sales_order.so_type", read_only=True)
+    items = serializers.JSONField(source="items_data", required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        db_alias = _masters_db_alias()
+        self.fields["company"].queryset = CompanyMaster.objects.using(db_alias).all()
+
+    class Meta:
+        model = OrderedBOM
+        fields = [
+            "id",
+            "company",
+            "company_name",
+            "sales_order",
+            "sales_order_no",
+            "so_type",
+            "material_type",
+            "items_data",
+            "items",
+            "created_at",
+        ]
+        read_only_fields = ["id", "company_name", "sales_order_no", "so_type", "created_at"]
+
+    def validate(self, attrs):
+        company = attrs.get("company")
+        sales_order = attrs.get("sales_order")
+
+        if company is None and sales_order is not None:
+            sales_order = SalesOrder.objects.get(pk=sales_order.pk)
+            attrs["company"] = sales_order.company
+            attrs["sales_order"] = sales_order
+            company = attrs["company"]
+
+        if company is None and sales_order is None:
+            raise serializers.ValidationError({"company": "Company is required."})
+
+        if company is not None and sales_order is not None:
+            if getattr(sales_order, "company_id", None) and company.pk != sales_order.company_id:
+                raise serializers.ValidationError(
+                    {"company": "Selected company does not match the selected sales order."}
+                )
+
+        return attrs
 
 
 # Sales Invoice
@@ -465,6 +557,34 @@ class SalesInvoiceListRowSerializer(serializers.Serializer):
     approve_status = serializers.CharField()
 
 
+class SalesInvoiceDocumentSerializer(serializers.ModelSerializer):
+    file_url = serializers.FileField(source="file", read_only=True)
+
+    class Meta:
+        model = SalesInvoiceDocument
+        fields = [
+            "id",
+            "unique_id",
+            "document_type",
+            "document_name",
+            "file",
+            "file_url",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class SalesInvoiceDocumentCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalesInvoiceDocument
+        fields = ["document_type", "document_name", "file"]
+
+    def validate_file(self, value):
+        if value.size <= 0:
+            raise serializers.ValidationError("Please upload a valid file.")
+        return value
+
+
 class PurchaseExpenseItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.product_name", read_only=True)
     uom = serializers.CharField(source="unit.unit_name", read_only=True)
@@ -537,13 +657,14 @@ class PurchaseExpenseSerializer(serializers.ModelSerializer):
     items = PurchaseExpenseItemSerializer(many=True)
     supplier_name = serializers.SerializerMethodField(read_only=True)
     project_name = serializers.CharField(source="project.name", read_only=True)
-    category_name = serializers.CharField(source="category.group_name", read_only=True)
-    sub_category_name = serializers.CharField(source="sub_category.sub_group_name", read_only=True)
+    category_name = serializers.CharField(source="category.category_name", read_only=True)
+    sub_category_name = serializers.CharField(source="sub_category.sub_category_name", read_only=True)
+    payment_type_name = serializers.CharField(source="payment_type.payment_name", read_only=True)
 
     class Meta:
         model = PurchaseExpense
         fields = "__all__"
-        read_only_fields = ["id", "created_at", "supplier_name", "project_name", "category_name", "sub_category_name"]
+        read_only_fields = ["id", "created_at", "supplier_name", "project_name", "category_name", "sub_category_name", "payment_type_name"]
 
     def get_supplier_name(self, obj):
         if obj.supplier_manual_entry and obj.manual_supplier_name:

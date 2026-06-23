@@ -21,6 +21,10 @@ class UniqueIDMixin(models.Model):
 
 # Rate order
 class RateOrder(UniqueIDMixin):
+    class ApprovalStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
 
     STATUS_CHOICES = (
         ('active', 'Active'),
@@ -49,6 +53,28 @@ class RateOrder(UniqueIDMixin):
     items_data = models.JSONField(default=list, blank=True)
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    approval_status = models.CharField(
+        max_length=20,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.PENDING,
+    )
+    approved_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_rate_orders',
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejected_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rejected_rate_orders',
+    )
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    approval_remarks = models.TextField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
