@@ -2,7 +2,6 @@
 
 from typing import Any, cast
 
-from django.db import connections
 from django.db.models import F, Q
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
@@ -20,13 +19,6 @@ from PROCUREMENT.schema_utils import (
     query_int_parameter,
     query_str_parameter,
 )
-from common_master.models import Company as CompanyMaster
-from common_master.models import Project as ProjectMaster
-from common_master.models import SupplierProfile as SupplierProfileMaster
-from common_master.models import Tax as TaxMaster
-from purchase_master.models import ProductCreation as ProductMaster
-from purchase_master.models import UnitMaster
-
 from .models import (
     GRN,
     PurchaseOrder,
@@ -39,7 +31,7 @@ from .models import (
     SRN,
     Supplier,
 )
-from purchase_master.models import ItemMaster
+from .services import MasterDataService, UserLookupService
 from .serializers import (
     CompanyDropdownSerializer,
     GRNSerializer,
@@ -64,69 +56,13 @@ from .serializers import (
 )
 
 
-def _masters_db_alias():
-    return "masters_db1"
-
-
-def _sync_procurement_suppliers_from_master():
-    """
-    Keep the procurement supplier dropdown aligned with the supplier master.
-
-    Procurement transactions still reference the local `purchase_entrys.Supplier`
-    model, while the new supplier-creation UI writes into
-    `common_master.SupplierProfile`. For dropdown-driven flows like rate orders,
-    we sync active master suppliers into the procurement table on demand.
-    """
-
-    master_suppliers = SupplierProfileMaster.objects.using(_masters_db_alias()).filter(
-        is_delete=False,
-        is_active=True,
-    ).select_related("msme_type").order_by("vendor_name")
-
-    for master_supplier in master_suppliers:
-        Supplier.objects.update_or_create(
-            name=master_supplier.vendor_name.strip(),
-            defaults={
-                "gst_no": master_supplier.gst_no or "",
-                "pan_no": master_supplier.pan_no or "",
-                "msme_type": (
-                    master_supplier.msme_type.name
-                    if getattr(master_supplier, "msme_type", None)
-                    else ""
-                ),
-                "contact_person": "",
-                "contact_no": master_supplier.phone_no or "",
-                "address": master_supplier.address or "",
-                "is_active": bool(master_supplier.is_active),
-            },
-        )
-
 # Rate order
 RATE_ORDER_APPROVER_USERNAME = "ram"
 RATE_ORDER_APPROVER_USER_TYPE = "purchase head"
 
 
 def _rate_order_user_type_name(username):
-    if not username:
-        return ""
-
-    try:
-        with connections[_masters_db_alias()].cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT ut.name
-                FROM admin_master_usercreation uc
-                LEFT JOIN admin_master_usertype ut ON uc.user_type_id = ut.id
-                WHERE LOWER(uc.username) = LOWER(%s)
-                LIMIT 1
-                """,
-                [username],
-            )
-            row = cursor.fetchone()
-    except Exception:
-        return ""
-
-    return str(row[0]).strip().lower() if row and row[0] else ""
+    return UserLookupService.get_user_type_name(username)
 
 
 def _is_rate_order_approver(user):
@@ -141,7 +77,7 @@ def _is_rate_order_approver(user):
 
 
 class RateOrderViewSet(viewsets.ModelViewSet):
-    queryset = RateOrder.objects.select_related('company', 'project', 'supplier').order_by('-created_at')
+    queryset = RateOrder.objects.order_by('-created_at')
     serializer_class = RateOrderSerializer
 
     def get_queryset(self):
@@ -152,7 +88,7 @@ class RateOrderViewSet(viewsets.ModelViewSet):
         approval_status = self.request.GET.get('approval_status')
 
         if supplier:
-            qs = qs.filter(supplier_id=supplier)
+            qs = qs.filter(supplier_code=supplier)
 
         if status:
             qs = qs.filter(status=status)
@@ -305,9 +241,9 @@ def _apply_purchase_order_filters(queryset, request):
     search_value = request.GET.get("search[value]", "").strip()
 
     if company_id:
-        queryset = queryset.filter(company_id=company_id)
+        queryset = queryset.filter(company_code=company_id)
     if project_id:
-        queryset = queryset.filter(project_id=project_id)
+        queryset = queryset.filter(project_code=project_id)
     if from_date:
         queryset = queryset.filter(entry_date__gte=from_date)
     if to_date:
@@ -315,9 +251,10 @@ def _apply_purchase_order_filters(queryset, request):
     if search_value:
         queryset = queryset.filter(
             Q(po_number__icontains=search_value)
-            | Q(company__name__icontains=search_value)
-            | Q(project__name__icontains=search_value)
-            | Q(supplier__name__icontains=search_value)
+            | Q(company_code__icontains=search_value)
+            | Q(project_code__icontains=search_value)
+            | Q(supplier_name__icontains=search_value)
+            | Q(supplier_code__icontains=search_value)
             | Q(remarks__icontains=search_value)
         )
     return queryset
@@ -339,9 +276,9 @@ def _apply_purchase_requisition_filters(queryset, request):
     if pr_number:
         queryset = queryset.filter(pr_number__icontains=pr_number)
     if company_id:
-        queryset = queryset.filter(company_id=company_id)
+        queryset = queryset.filter(company_code=company_id)
     if project_id:
-        queryset = queryset.filter(project_id=project_id)
+        queryset = queryset.filter(project_code=project_id)
     if requisition_type:
         queryset = queryset.filter(requisition_type=requisition_type)
     if requisition_for:
@@ -351,8 +288,8 @@ def _apply_purchase_requisition_filters(queryset, request):
     if search_value:
         queryset = queryset.filter(
             Q(pr_number__icontains=search_value)
-            | Q(company__name__icontains=search_value)
-            | Q(project__name__icontains=search_value)
+            | Q(company_code__icontains=search_value)
+            | Q(project_code__icontains=search_value)
             | Q(requested_by__icontains=search_value)
             | Q(requisition_type__icontains=search_value)
             | Q(requisition_for__icontains=search_value)
@@ -384,10 +321,12 @@ def _serialize_purchase_order_rows(purchase_orders, meta):
                 "id": purchase_order.id,
                 "sno": meta["start"] + index,
                 "po_number": purchase_order.po_number,
-                "company_name": purchase_order.company.name,
-                "project_name": purchase_order.project.name,
-                "supplier_id": purchase_order.supplier.id,
-                "supplier_name": purchase_order.supplier.name,
+                "company_code": purchase_order.company_code,
+                "company_name": purchase_order.company_code,
+                "project_code": purchase_order.project_code,
+                "project_name": purchase_order.project_code,
+                "supplier_code": purchase_order.supplier_code,
+                "supplier_name": purchase_order.supplier_name or purchase_order.supplier_code,
                 "entry_date": purchase_order.entry_date,
                 "net_amount": float(purchase_order.total_basic_value),
                 "gross_amount": float(purchase_order.gross_amount),
@@ -405,7 +344,7 @@ def _serialize_purchase_order_rows(purchase_orders, meta):
 
 
 def _approval_level_queryset(level, request):
-    queryset = PurchaseOrder.objects.select_related("company", "project", "supplier")
+    queryset = PurchaseOrder.objects.all()
     queryset = _apply_purchase_order_filters(queryset, request)
 
     if level == PurchaseOrderApproval.Level.LEVEL_2:
@@ -444,9 +383,12 @@ def _serialize_approval_rows(purchase_orders, meta, current_level):
             "sno": meta["start"] + index,
             "entry_date": purchase_order.entry_date,
             "po_number": purchase_order.po_number,
-            "company_name": purchase_order.company.name,
-            "project_name": purchase_order.project.name,
-            "supplier_name": purchase_order.supplier.name,
+            "company_code": purchase_order.company_code,
+            "company_name": purchase_order.company_code,
+            "project_code": purchase_order.project_code,
+            "project_name": purchase_order.project_code,
+            "supplier_code": purchase_order.supplier_code,
+            "supplier_name": purchase_order.supplier_name or purchase_order.supplier_code,
             "net_amount": float(purchase_order.total_basic_value),
             "gross_amount": float(purchase_order.gross_amount),
             "approval_status": level_1.status if current_level == 1 and level_1 else (
@@ -507,13 +449,13 @@ def _apply_receipt_filters(queryset, request):
         queryset = queryset.filter(invoice_date__range=[from_date, to_date])
 
     if company:
-        queryset = queryset.filter(company_id=company)
+        queryset = queryset.filter(company_code=company)
 
     if project:
-        queryset = queryset.filter(project_id=project)
+        queryset = queryset.filter(project_code=project)
 
     if supplier:
-        queryset = queryset.filter(supplier_id=supplier)
+        queryset = queryset.filter(supplier_code=supplier)
 
     if status_value:
         queryset = queryset.filter(status=status_value)
@@ -530,11 +472,7 @@ def _apply_receipt_filters(queryset, request):
 )
 @api_view(["GET"])
 def product_dropdown(request):
-    queryset = (
-        ProductMaster.objects.using(_masters_db_alias())
-        .filter(is_active=True)
-        .select_related("company")
-    )
+    queryset = MasterDataService.active_products()
     company_id = request.GET.get("company")
     search_value = request.GET.get("search", "").strip()
 
@@ -550,11 +488,7 @@ def product_dropdown(request):
 @extend_schema(responses=ItemDropdownSerializer(many=True))
 @api_view(["GET"])
 def item_dropdown(request):
-    queryset = (
-        ItemMaster.objects.using(_masters_db_alias())
-        .filter(is_active=True)
-        .order_by("item_name")
-    )
+    queryset = MasterDataService.active_items().order_by("item_name")
     serializer = ItemDropdownSerializer(queryset, many=True)
     return Response(serializer.data)
 
@@ -562,11 +496,7 @@ def item_dropdown(request):
 @extend_schema(responses=CompanyDropdownSerializer(many=True))
 @api_view(["GET"])
 def company_dropdown(request):
-    queryset = (
-        CompanyMaster.objects.using(_masters_db_alias())
-        .filter(is_active=True)
-        .order_by("name")
-    )
+    queryset = MasterDataService.active_companies().order_by("name")
     serializer = CompanyDropdownSerializer(queryset, many=True)
     return Response(serializer.data)
 
@@ -577,11 +507,7 @@ def company_dropdown(request):
 )
 @api_view(["GET"])
 def project_dropdown(request):
-    queryset = (
-        ProjectMaster.objects.using(_masters_db_alias())
-        .filter(is_active=True)
-        .select_related("company")
-    )
+    queryset = MasterDataService.active_projects()
     company_id = request.GET.get("company")
     if company_id:
         queryset = queryset.filter(company_id=company_id)
@@ -592,7 +518,7 @@ def project_dropdown(request):
 @extend_schema(responses=SupplierSerializer(many=True))
 @api_view(["GET"])
 def supplier_dropdown(request):
-    _sync_procurement_suppliers_from_master()
+    MasterDataService.sync_procurement_suppliers()
     queryset = Supplier.objects.filter(is_active=True).order_by("name")
     serializer = SupplierSerializer(queryset, many=True)
     return Response(serializer.data)
@@ -601,11 +527,7 @@ def supplier_dropdown(request):
 @extend_schema(responses=UnitDropdownSerializer(many=True))
 @api_view(["GET"])
 def unit_dropdown(request):
-    queryset = (
-        UnitMaster.objects.using(_masters_db_alias())
-        .filter(is_active=True)
-        .order_by("unit_name")
-    )
+    queryset = MasterDataService.active_units().order_by("unit_name")
     serializer = UnitDropdownSerializer(queryset, many=True)
     return Response(serializer.data)
 
@@ -613,11 +535,7 @@ def unit_dropdown(request):
 @extend_schema(responses=TaxDropdownSerializer(many=True))
 @api_view(["GET"])
 def tax_dropdown(request):
-    queryset = (
-        TaxMaster.objects.using(_masters_db_alias())
-        .filter(is_active=True)
-        .order_by("name")
-    )
+    queryset = MasterDataService.active_taxes().order_by("name")
     serializer = TaxDropdownSerializer(queryset, many=True)
     return Response(serializer.data)
 
@@ -648,7 +566,7 @@ def purchase_order_types(request):
 @api_view(["GET"])
 def purchase_order_list(request):
     meta = _parse_datatable_request(request)
-    queryset = PurchaseOrder.objects.select_related("company", "project", "supplier")
+    queryset = PurchaseOrder.objects.all()
     total_records = queryset.count()
     queryset = _apply_purchase_order_filters(queryset, request)
 
@@ -679,15 +597,10 @@ def create_purchase_order(request):
 )
 @api_view(["GET"])
 def purchase_order_detail(request, pk):
-    queryset = PurchaseOrder.objects.select_related(
-        "company",
-        "project",
-        "supplier",
-        "freight_tax",
-        "other_tax",
-        "packing_tax",
-    ).prefetch_related("approvals")
-    purchase_order = get_object_or_404(queryset, pk=pk)
+    purchase_order = get_object_or_404(
+        PurchaseOrder.objects.prefetch_related("approvals"),
+        pk=pk,
+    )
     serializer = PurchaseOrderSerializer(purchase_order)
     return Response(serializer.data)
 
@@ -817,8 +730,8 @@ def purchase_requisition_sublist(request):
         return Response({"data": []})
 
     queryset = PurchaseRequisition.objects.filter(
-        company_id=company_id,
-        project_id=project_id,
+        company_code=company_id,
+        project_code=project_id,
     ).order_by("-requisition_date", "-id")
 
     rows = []
@@ -846,10 +759,7 @@ def purchase_requisition_sublist(request):
 )
 @api_view(["GET"])
 def purchase_requisition_approval_list(request):
-    queryset = PurchaseRequisition.objects.select_related("company", "project").order_by(
-        "-requisition_date",
-        "-id",
-    )
+    queryset = PurchaseRequisition.objects.order_by("-requisition_date", "-id")
     rows = _apply_purchase_requisition_filters(queryset, request).values(
         "id",
         "pr_number",
@@ -858,8 +768,8 @@ def purchase_requisition_approval_list(request):
         "requisition_date",
         "requested_by",
         "status",
-        company_name=F("company__name"),
-        project_name=F("project__name"),
+        company_name=F("company_code"),
+        project_name=F("project_code"),
     )
 
     data = []
@@ -904,7 +814,7 @@ def create_purchase_requisition(request):
 @api_view(["GET", "PUT", "PATCH", "DELETE"])
 def purchase_requisition_detail(request, pk):
     purchase_requisition = get_object_or_404(
-        PurchaseRequisition.objects.select_related("company", "project").prefetch_related("documents"),
+        PurchaseRequisition.objects.prefetch_related("documents"),
         pk=pk,
     )
 
@@ -975,7 +885,7 @@ class GRNViewSet(viewsets.ModelViewSet):
         return _apply_receipt_filters(qs, self.request)
 
     def list(self, request, *args, **kwargs):
-        qs = self.get_queryset().select_related('company', 'project', 'supplier', 'po')
+        qs = self.get_queryset().select_related('po')
 
         data = qs.values(
             'id',
@@ -983,9 +893,9 @@ class GRNViewSet(viewsets.ModelViewSet):
             'supplier_invoice_no',
             'grn_number',
             'status',
-            company_name=F('company__name'),
-            project_name=F('project__name'),
-            supplier_name=F('supplier__name'),
+            company_name=F('company_code'),
+            project_name=F('project_code'),
+            supplier_name=F('supplier_name'),
             po_number=F('po__po_number'),
         )
 
@@ -1016,16 +926,16 @@ class SRNViewSet(viewsets.ModelViewSet):
         return _apply_receipt_filters(qs, self.request)
 
     def list(self, request, *args, **kwargs):
-        qs = self.get_queryset().select_related('company', 'project', 'supplier', 'po')
+        qs = self.get_queryset().select_related('po')
 
         data = qs.values(
             'id',
             'invoice_date',
             'supplier_invoice_no',
             'srn_number',
-            company_name=F('company__name'),
-            project_name=F('project__name'),
-            supplier_name=F('supplier__name'),
+            company_name=F('company_code'),
+            project_name=F('project_code'),
+            supplier_name=F('supplier_name'),
             po_number=F('po__po_number'),
         )
 

@@ -134,9 +134,11 @@ TEMPLATES = [
     },
 ]
 
+
 # --------------------------------------------------
 # DATABASE
 # --------------------------------------------------
+
 
 DATABASES = {
 
@@ -184,13 +186,23 @@ DATABASES = {
     },
 }
 
+
 # --------------------------------------------------
 # DATABASE ROUTERS
 # --------------------------------------------------
 
+
 DATABASE_ROUTERS = [
     'PROCUREMENT.dbrouters.AuthRouter',
 ]
+
+# During test runs we let Django build purchase_entrys directly from the
+# refactored models so the legacy cross-database migration history does not
+# block fresh database setup.
+if any(arg == "test" for arg in sys.argv):
+    MIGRATION_MODULES = {
+        "purchase_entrys": "purchase_entrys.test_migrations",
+    }
 
 # --------------------------------------------------
 # DJANGO REST FRAMEWORK

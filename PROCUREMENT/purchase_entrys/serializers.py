@@ -4,17 +4,9 @@ import uuid
 from decimal import Decimal
 from typing import Any, Mapping, cast
 
-from django.db import connections
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
-
-from common_master.models import Company as CompanyMaster
-from common_master.models import Project as ProjectMaster
-from common_master.models import Tax as TaxMaster
-from purchase_master.models import ItemMaster
-from purchase_master.models import ProductCreation as ProductMaster
-from purchase_master.models import UnitMaster
 
 from .models import (
     GRN,
@@ -28,6 +20,7 @@ from .models import (
     SRN,
     Supplier,
 )
+from .services import MasterDataNotFound, MasterDataService
 
 PO_DISCOUNT_PERCENTAGE = "percentage"
 PO_DISCOUNT_AMOUNT = "amount"
@@ -35,10 +28,6 @@ PO_DISCOUNT_TYPE_CHOICES = (
     (PO_DISCOUNT_PERCENTAGE, "Percentage"),
     (PO_DISCOUNT_AMOUNT, "Amount"),
 )
-
-
-def _masters_db_alias():
-    return "masters_db1"
 
 
 def _as_decimal(value):
@@ -64,124 +53,62 @@ def _date_to_json(value):
     return value.isoformat() if value else None
 
 
-def _belongs_to_company(product, company):
-    return product.company_id == company.id
-
-
 def _get_product(product_id):
     try:
-        return ProductMaster.objects.using(_masters_db_alias()).get(pk=product_id)
-    except ProductMaster.DoesNotExist as exc:
-        raise serializers.ValidationError(
-            {"items": f"Invalid product id '{product_id}'."}
-        ) from exc
+        return MasterDataService.get_product(product_id)
+    except MasterDataNotFound as exc:
+        raise serializers.ValidationError({"items": str(exc)}) from exc
 
 
 def _get_unit(unit_id):
     try:
-        return UnitMaster.objects.using(_masters_db_alias()).get(pk=unit_id)
-    except UnitMaster.DoesNotExist as exc:
-        raise serializers.ValidationError(
-            {"items": f"Invalid unit id '{unit_id}'."}
-        ) from exc
+        return MasterDataService.get_unit(unit_id)
+    except MasterDataNotFound as exc:
+        raise serializers.ValidationError({"items": str(exc)}) from exc
 
 
 def _get_tax(tax_id):
     if not tax_id:
         return None
     try:
-        return TaxMaster.objects.using(_masters_db_alias()).get(pk=tax_id)
-    except TaxMaster.DoesNotExist as exc:
-        raise serializers.ValidationError(
-            {"items": f"Invalid tax id '{tax_id}'."}
-        ) from exc
+        return MasterDataService.get_tax(tax_id)
+    except MasterDataNotFound as exc:
+        raise serializers.ValidationError({"items": str(exc)}) from exc
 
 
 def _get_item_master(item_id):
     try:
-        return (
-            ItemMaster.objects.using(_masters_db_alias())
-            .select_related("unit")
-            .get(pk=item_id)
-        )
-    except ItemMaster.DoesNotExist as exc:
-        raise serializers.ValidationError(
-            {"items": f"Invalid item id '{item_id}'."}
-        ) from exc
-
-
-def _sync_local_company(master_company):
-    local_company, _ = CompanyMaster.objects.update_or_create(
-        pk=master_company.pk,
-        defaults={
-            "name": master_company.name,
-            "code": master_company.code,
-            "country": None,
-            "state": None,
-            "city": None,
-            "pincode": master_company.pincode,
-            "latitude": master_company.latitude,
-            "longitude": master_company.longitude,
-            "is_active": master_company.is_active,
-        },
-    )
-    return local_company
-
-
-def _sync_local_project(master_project):
-    local_company = _sync_local_company(master_project.company)
-    local_project, _ = ProjectMaster.objects.update_or_create(
-        pk=master_project.pk,
-        defaults={
-            "company": local_company,
-            "name": master_project.name,
-            "code": master_project.code,
-            "client_name": master_project.client_name,
-            "application_type": None,
-            "capacity": master_project.capacity,
-            "duration": master_project.duration,
-            "project_date": master_project.project_date,
-            "country": None,
-            "state": None,
-            "city": None,
-            "address": master_project.address,
-            "latitude": master_project.latitude,
-            "longitude": master_project.longitude,
-            "pincode": master_project.pincode,
-            "pan_number": master_project.pan_number,
-            "gst_number": master_project.gst_number,
-            "gst_reg_date": master_project.gst_reg_date,
-            "contact_person": master_project.contact_person,
-            "contact_number": master_project.contact_number,
-            "contact_email": master_project.contact_email,
-            "website": master_project.website,
-            "description": master_project.description,
-            "is_active": master_project.is_active,
-        },
-    )
-    return local_project
-
-
-def _sync_local_tax(master_tax):
-    if master_tax is None:
-        return None
-
-    local_tax, _ = TaxMaster.objects.update_or_create(
-        pk=master_tax.pk,
-        defaults={
-            "country": None,
-            "name": master_tax.name,
-            "value": master_tax.value,
-            "is_active": master_tax.is_active,
-        },
-    )
-    return local_tax
+        return MasterDataService.get_item(item_id)
+    except MasterDataNotFound as exc:
+        raise serializers.ValidationError({"items": str(exc)}) from exc
 
 
 def _calculate_tax_amount(amount, tax):
     if not amount or not tax:
         return Decimal("0.00")
     return (amount * tax.value) / Decimal("100")
+
+
+def _get_tax_by_code(tax_code):
+    return MasterDataService.get_tax_by_code(tax_code)
+
+
+def _code_label(value):
+    return value or ""
+
+
+def _company_name(code):
+    if not code:
+        return ""
+    obj = MasterDataService.get_company_by_code(code)
+    return obj.name if obj else code
+
+
+def _project_name(code):
+    if not code:
+        return ""
+    obj = MasterDataService.get_project_by_code(code)
+    return obj.name if obj else code
 
 
 def _calculate_discounted_amount(qty, rate, discount_type, discount_value):
@@ -288,9 +215,8 @@ class RateOrderSerializer(serializers.ModelSerializer):
         required=False,
         write_only=True,
     )
-    company_name = serializers.CharField(source="company.name", read_only=True)
-    project_name = serializers.CharField(source="project.name", read_only=True)
-    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    company_name = serializers.SerializerMethodField()
+    project_name = serializers.SerializerMethodField()
     item_count = serializers.SerializerMethodField()
     approved_by_name = serializers.SerializerMethodField()
     rejected_by_name = serializers.SerializerMethodField()
@@ -301,11 +227,11 @@ class RateOrderSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "unique_id",
-            "company",
+            "company_code",
             "company_name",
-            "project",
+            "project_code",
             "project_name",
-            "supplier",
+            "supplier_code",
             "supplier_name",
             "status",
             "approval_status",
@@ -324,7 +250,6 @@ class RateOrderSerializer(serializers.ModelSerializer):
             "unique_id",
             "company_name",
             "project_name",
-            "supplier_name",
             "approval_status",
             "approved_by_name",
             "approved_at",
@@ -336,27 +261,8 @@ class RateOrderSerializer(serializers.ModelSerializer):
             "documents",
         ]
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        db_alias = _masters_db_alias()
-        field_querysets = {
-            "company": CompanyMaster.objects.using(db_alias).filter(is_active=True),
-            "project": ProjectMaster.objects.using(db_alias).filter(is_active=True),
-        }
-        for field_name, queryset in field_querysets.items():
-            field = self.fields.get(field_name)
-            if field is not None and hasattr(field, "queryset"):
-                field.queryset = queryset
-
     def validate(self, attrs):
         items = attrs.get("items_data")
-        company = attrs.get("company") or getattr(self.instance, "company", None)
-        project = attrs.get("project") or getattr(self.instance, "project", None)
-
-        if company and project and project.company_id != company.id:
-            raise serializers.ValidationError(
-                {"project": "Selected project does not belong to the selected company."}
-            )
 
         if self.instance is None and not items:
             raise serializers.ValidationError({"items": "At least one rate row is required."})
@@ -400,6 +306,12 @@ class RateOrderSerializer(serializers.ModelSerializer):
     def get_item_count(self, obj):
         return len(obj.items_data) if isinstance(obj.items_data, list) else 0
 
+    def get_company_name(self, obj):
+        return _company_name(obj.company_code)
+
+    def get_project_name(self, obj):
+        return _project_name(obj.project_code)
+
     def get_approved_by_name(self, obj):
         return obj.approved_by.get_username() if obj.approved_by_id else ""
 
@@ -432,7 +344,7 @@ class RateOrderSerializer(serializers.ModelSerializer):
 
 class CompanyDropdownSerializer(serializers.ModelSerializer):
     class Meta:
-        model = CompanyMaster
+        model = MasterDataService.active_companies().model
         fields = ["id", "name", "code"]
 
 
@@ -440,7 +352,7 @@ class ProjectDropdownSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
-        model = ProjectMaster
+        model = MasterDataService.active_projects().model
         fields = [
             "id",
             "company",
@@ -459,6 +371,7 @@ class SupplierSerializer(serializers.ModelSerializer):
         model = Supplier
         fields = [
             "id",
+            "supplier_code",
             "name",
             "gst_no",
             "pan_no",
@@ -475,25 +388,25 @@ class ProductDropdownSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
-        model = ProductMaster
+        model = MasterDataService.active_products().model
         fields = ["id", "company", "company_name", "product_name"]
 
 
 class UnitDropdownSerializer(serializers.ModelSerializer):
     class Meta:
-        model = UnitMaster
+        model = MasterDataService.active_units().model
         fields = ["id", "unit_name", "decimal_points"]
 
 
 class ItemDropdownSerializer(serializers.ModelSerializer):
     class Meta:
-        model = ItemMaster
+        model = MasterDataService.active_items().model
         fields = ["id", "item_name", "item_code"]
 
 
 class TaxDropdownSerializer(serializers.ModelSerializer):
     class Meta:
-        model = TaxMaster
+        model = MasterDataService.active_taxes().model
         fields = ["id", "name", "value"]
 
 
@@ -537,13 +450,12 @@ class PurchaseOrderLineSerializer(serializers.Serializer):
 
 
 class PurchaseOrderSerializer(serializers.ModelSerializer):
-    company_name = serializers.CharField(source="company.name", read_only=True)
-    project_name = serializers.CharField(source="project.name", read_only=True)
-    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    company_name = serializers.SerializerMethodField()
+    project_name = serializers.SerializerMethodField()
     approval_status = serializers.CharField(source="approval_status_label", read_only=True)
-    freight_tax_name = serializers.CharField(source="freight_tax.name", read_only=True)
-    other_tax_name = serializers.CharField(source="other_tax.name", read_only=True)
-    packing_tax_name = serializers.CharField(source="packing_tax.name", read_only=True)
+    freight_tax_name = serializers.SerializerMethodField()
+    other_tax_name = serializers.SerializerMethodField()
+    packing_tax_name = serializers.SerializerMethodField()
     items = PurchaseOrderLineSerializer(many=True, source="items_data", required=False)
 
     class Meta:
@@ -551,11 +463,11 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "po_number",
-            "company",
+            "company_code",
             "company_name",
-            "project",
+            "project_code",
             "project_name",
-            "supplier",
+            "supplier_code",
             "supplier_name",
             "po_type",
             "pr_number",
@@ -574,15 +486,15 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "revision_remarks",
             "total_basic_value",
             "freight_charges",
-            "freight_tax",
+            "freight_tax_code",
             "freight_tax_name",
             "freight_tax_amount",
             "other_charges",
-            "other_tax",
+            "other_tax_code",
             "other_tax_name",
             "other_tax_amount",
             "packing_forwarding",
-            "packing_tax",
+            "packing_tax_code",
             "packing_tax_name",
             "packing_tax_amount",
             "round_off",
@@ -603,7 +515,6 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "po_number",
             "company_name",
             "project_name",
-            "supplier_name",
             "freight_tax_amount",
             "other_tax_amount",
             "packing_tax_amount",
@@ -616,31 +527,11 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        db_alias = _masters_db_alias()
-        field_querysets = {
-            "company": CompanyMaster.objects.using(db_alias).filter(is_active=True),
-            "project": ProjectMaster.objects.using(db_alias).filter(is_active=True),
-            "freight_tax": TaxMaster.objects.using(db_alias).filter(is_active=True),
-            "other_tax": TaxMaster.objects.using(db_alias).filter(is_active=True),
-            "packing_tax": TaxMaster.objects.using(db_alias).filter(is_active=True),
-        }
-        for field_name, queryset in field_querysets.items():
-            field = self.fields.get(field_name)
-            if field is not None and hasattr(field, "queryset"):
-                field.queryset = queryset
-
     def validate(self, attrs):
         items = attrs.get("items_data")
-        company = attrs.get("company") or getattr(self.instance, "company", None)
-        project = attrs.get("project") or getattr(self.instance, "project", None)
-        supplier = attrs.get("supplier") or getattr(self.instance, "supplier", None)
-
-        if company and project and project.company_id != company.id:
-            raise serializers.ValidationError(
-                {"project": "Selected project does not belong to the selected company."}
-            )
+        supplier_code = attrs.get("supplier_code") or getattr(
+            self.instance, "supplier_code", None
+        )
 
         if self.instance is None and not items:
             raise serializers.ValidationError(
@@ -651,22 +542,15 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
                 {"items": "At least one product row is required."}
             )
 
-        if items and company:
+        if items:
             for item in items:
-                product = _get_product(item["product"])
-                if not _belongs_to_company(product, company):
-                    raise serializers.ValidationError(
-                        {
-                            "items": (
-                                f"Product '{product.product_name}' does not belong to "
-                                f"company '{company.name}'."
-                            )
-                        }
-                    )
+                _get_product(item["product"])
                 _get_unit(item["unit"])
                 _get_tax(item.get("tax"))
 
+        supplier = Supplier.objects.filter(supplier_code=supplier_code).first()
         if supplier:
+            attrs.setdefault("supplier_name", supplier.name)
             attrs.setdefault("supplier_gst_no", supplier.gst_no or "")
             attrs.setdefault("supplier_pan_no", supplier.pan_no or "")
             attrs.setdefault("supplier_msme_type", supplier.msme_type or "")
@@ -675,7 +559,22 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             attrs.setdefault("supplier_contact_no", supplier.contact_no or "")
         return attrs
 
-    def _normalise_items(self, items_data, company):
+    def get_company_name(self, obj):
+        return _company_name(obj.company_code)
+
+    def get_project_name(self, obj):
+        return _project_name(obj.project_code)
+
+    def get_freight_tax_name(self, obj):
+        return _code_label(obj.freight_tax_code)
+
+    def get_other_tax_name(self, obj):
+        return _code_label(obj.other_tax_code)
+
+    def get_packing_tax_name(self, obj):
+        return _code_label(obj.packing_tax_code)
+
+    def _normalise_items(self, items_data):
         stored_items = []
         total_basic = Decimal("0.00")
         total_item_tax = Decimal("0.00")
@@ -684,16 +583,6 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             product = _get_product(item_data["product"])
             unit = _get_unit(item_data["unit"])
             tax = _get_tax(item_data.get("tax"))
-
-            if company and not _belongs_to_company(product, company):
-                raise serializers.ValidationError(
-                    {
-                        "items": (
-                            f"Product '{product.product_name}' does not belong to "
-                            f"company '{company.name}'."
-                        )
-                    }
-                )
 
             qty = _as_decimal(item_data["qty"])
             rate = _as_decimal(item_data["rate"])
@@ -755,15 +644,15 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     def _save_amounts(self, purchase_order, stored_items, total_basic, total_item_tax):
         freight_tax_amount = _calculate_tax_amount(
             purchase_order.freight_charges,
-            purchase_order.freight_tax,
+            _get_tax_by_code(purchase_order.freight_tax_code),
         )
         other_tax_amount = _calculate_tax_amount(
             purchase_order.other_charges,
-            purchase_order.other_tax,
+            _get_tax_by_code(purchase_order.other_tax_code),
         )
         packing_tax_amount = _calculate_tax_amount(
             purchase_order.packing_forwarding,
-            purchase_order.packing_tax,
+            _get_tax_by_code(purchase_order.packing_tax_code),
         )
         total_gst_amount = (
             total_item_tax + freight_tax_amount + other_tax_amount + packing_tax_amount
@@ -800,27 +689,9 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def create(self, validated_data):
         items_data = validated_data.pop("items_data")
-        company = validated_data.get("company")
-        project = validated_data.get("project")
-        if company is not None:
-            validated_data["company"] = _sync_local_company(company)
-        if project is not None:
-            validated_data["project"] = _sync_local_project(project)
-
-        freight_tax = validated_data.get("freight_tax")
-        other_tax = validated_data.get("other_tax")
-        packing_tax = validated_data.get("packing_tax")
-        if freight_tax is not None:
-            validated_data["freight_tax"] = _sync_local_tax(freight_tax)
-        if other_tax is not None:
-            validated_data["other_tax"] = _sync_local_tax(other_tax)
-        if packing_tax is not None:
-            validated_data["packing_tax"] = _sync_local_tax(packing_tax)
-
         purchase_order = PurchaseOrder.objects.create(**validated_data)
         stored_items, total_basic, total_item_tax = self._normalise_items(
-            items_data,
-            purchase_order.company,
+            items_data
         )
         self._save_amounts(purchase_order, stored_items, total_basic, total_item_tax)
 
@@ -846,23 +717,6 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def update(self, instance, validated_data):
         items_data = validated_data.pop("items_data", None)
-        company = validated_data.get("company")
-        project = validated_data.get("project")
-        if company is not None:
-            validated_data["company"] = _sync_local_company(company)
-        if project is not None:
-            validated_data["project"] = _sync_local_project(project)
-
-        freight_tax = validated_data.get("freight_tax")
-        other_tax = validated_data.get("other_tax")
-        packing_tax = validated_data.get("packing_tax")
-        if freight_tax is not None:
-            validated_data["freight_tax"] = _sync_local_tax(freight_tax)
-        if other_tax is not None:
-            validated_data["other_tax"] = _sync_local_tax(other_tax)
-        if packing_tax is not None:
-            validated_data["packing_tax"] = _sync_local_tax(packing_tax)
-
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
@@ -872,8 +726,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             total_basic, total_item_tax = self._stored_item_totals(stored_items)
         else:
             stored_items, total_basic, total_item_tax = self._normalise_items(
-                items_data,
-                instance.company,
+                items_data
             )
         self._save_amounts(instance, stored_items, total_basic, total_item_tax)
         return instance
@@ -977,8 +830,8 @@ class PurchaseRequisitionListRowSerializer(serializers.Serializer):
 
 
 class PurchaseRequisitionSerializer(serializers.ModelSerializer):
-    company_name = serializers.CharField(source="company.name", read_only=True)
-    project_name = serializers.CharField(source="project.name", read_only=True)
+    company_name = serializers.SerializerMethodField()
+    project_name = serializers.SerializerMethodField()
     documents = serializers.SerializerMethodField()
     items = PurchaseRequisitionLineSerializer(
         many=True,
@@ -991,9 +844,9 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "pr_number",
-            "company",
+            "company_code",
             "company_name",
-            "project",
+            "project_code",
             "project_name",
             "requisition_for",
             "requisition_type",
@@ -1020,27 +873,8 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
             "level2_remarks",
         ]
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        db_alias = _masters_db_alias()
-        field_querysets = {
-            "company": CompanyMaster.objects.using(db_alias).filter(is_active=True),
-            "project": ProjectMaster.objects.using(db_alias).filter(is_active=True),
-        }
-        for field_name, queryset in field_querysets.items():
-            field = self.fields.get(field_name)
-            if field is not None and hasattr(field, "queryset"):
-                field.queryset = queryset
-
     def validate(self, attrs):
         items = attrs.get("items_data")
-        company = attrs.get("company") or getattr(self.instance, "company", None)
-        project = attrs.get("project") or getattr(self.instance, "project", None)
-
-        if company and project and project.company_id != company.id:
-            raise serializers.ValidationError(
-                {"project": "Selected project does not belong to the selected company."}
-            )
 
         if self.instance is None and not items:
             raise serializers.ValidationError(
@@ -1055,6 +889,12 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
 
     def get_documents(self, obj):
         return PurchaseRequisitionDocumentSerializer(obj.documents.all(), many=True).data
+
+    def get_company_name(self, obj):
+        return _company_name(obj.company_code)
+
+    def get_project_name(self, obj):
+        return _project_name(obj.project_code)
 
     def _normalise_items(self, items_data):
         rows = []
@@ -1076,12 +916,6 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def create(self, validated_data):
         items_data = validated_data.pop("items_data")
-        company = validated_data.get("company")
-        project = validated_data.get("project")
-        if company is not None:
-            validated_data["company"] = _sync_local_company(company)
-        if project is not None:
-            validated_data["project"] = _sync_local_project(project)
         purchase_requisition = PurchaseRequisition.objects.create(**validated_data)
         purchase_requisition.items_data = self._normalise_items(items_data)
         purchase_requisition.save(update_fields=["items_data"])
@@ -1090,12 +924,6 @@ class PurchaseRequisitionSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def update(self, instance, validated_data):
         items_data = validated_data.pop("items_data", None)
-        company = validated_data.get("company")
-        project = validated_data.get("project")
-        if company is not None:
-            validated_data["company"] = _sync_local_company(company)
-        if project is not None:
-            validated_data["project"] = _sync_local_project(project)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         if items_data is not None:
@@ -1174,10 +1002,11 @@ class GRNSerializer(serializers.ModelSerializer):
             "id",
             "unique_id",
             "grn_number",
-            "company",
-            "project",
+            "company_code",
+            "project_code",
             "po",
-            "supplier",
+            "supplier_code",
+            "supplier_name",
             "invoice_date",
             "supplier_invoice_no",
             "eway_bill_no",
@@ -1210,18 +1039,6 @@ class GRNSerializer(serializers.ModelSerializer):
             "level2_checked_at",
             "level2_remarks",
         ]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        db_alias = _masters_db_alias()
-        field_querysets = {
-            "company": CompanyMaster.objects.using(db_alias).filter(is_active=True),
-            "project": ProjectMaster.objects.using(db_alias).filter(is_active=True),
-        }
-        for field_name, queryset in field_querysets.items():
-            field = self.fields.get(field_name)
-            if field is not None and hasattr(field, "queryset"):
-                field.queryset = queryset
 
     def validate(self, attrs):
         items = attrs.get("items_data")
@@ -1259,13 +1076,6 @@ class GRNSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def create(self, validated_data):
         items_data = validated_data.pop("items_data")
-        company = validated_data.get("company")
-        project = validated_data.get("project")
-        if company is not None:
-            validated_data["company"] = _sync_local_company(company)
-        if project is not None:
-            validated_data["project"] = _sync_local_project(project)
-
         grn = GRN.objects.create(**validated_data)
         grn.items_data = self._normalise_items(items_data)
         grn.save(update_fields=["items_data"])
@@ -1274,13 +1084,6 @@ class GRNSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def update(self, instance, validated_data):
         items_data = validated_data.pop("items_data", None)
-        company = validated_data.get("company")
-        project = validated_data.get("project")
-        if company is not None:
-            validated_data["company"] = _sync_local_company(company)
-        if project is not None:
-            validated_data["project"] = _sync_local_project(project)
-
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         if items_data is not None:
@@ -1334,10 +1137,11 @@ class SRNSerializer(serializers.ModelSerializer):
             "id",
             "unique_id",
             "srn_number",
-            "company",
-            "project",
+            "company_code",
+            "project_code",
             "po",
-            "supplier",
+            "supplier_code",
+            "supplier_name",
             "po_date",
             "invoice_date",
             "tax_invoice_date",
@@ -1391,18 +1195,6 @@ class SRNSerializer(serializers.ModelSerializer):
             "level2_approved_at",
             "level2_remarks",
         ]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        db_alias = _masters_db_alias()
-        field_querysets = {
-            "company": CompanyMaster.objects.using(db_alias).filter(is_active=True),
-            "project": ProjectMaster.objects.using(db_alias).filter(is_active=True),
-        }
-        for field_name, queryset in field_querysets.items():
-            field = self.fields.get(field_name)
-            if field is not None and hasattr(field, "queryset"):
-                field.queryset = queryset
 
     def validate(self, attrs):
         items = attrs.get("items_data")
