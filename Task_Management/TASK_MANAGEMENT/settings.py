@@ -152,7 +152,7 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
 
-        'NAME': 'task_management_db',
+        'NAME': 'task_management_db1',
 
         'USER': 'root',
 
@@ -170,10 +170,10 @@ DATABASES = {
     },
 
     # TASK MANAGEMENT DATABASE
-    'task_management_db': {
+    'task_management_db1': {
         'ENGINE': 'django.db.backends.mysql',
 
-        'NAME': 'task_management_db',
+        'NAME': 'task_management_db1',
 
         'USER': 'root',
 
@@ -191,10 +191,10 @@ DATABASES = {
     },
 
     # MASTERS DATABASE
-    'masters_db': {
+    'masters_db1': {
         'ENGINE': 'django.db.backends.mysql',
 
-        'NAME': 'masters_db',
+        'NAME': 'masters_db1',
 
         'USER': 'root',
 

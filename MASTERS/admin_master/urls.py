@@ -23,7 +23,6 @@ router.extra_api_root_dict = OrderedDict ({
     "user-permissions-create": "user-permission-create",
 
 })
-
 # User Creation endpoints
 user_patterns = [
     path('users_creation/', views.user_list, name='user-list'),
@@ -103,3 +102,5 @@ urlpatterns = (
 
     [path('', include(router.urls))]
 )
+
+

@@ -28,8 +28,69 @@ from .views import (
     StaffAccountDetailsListAPIView,
     StaffAccountDetailsRetrieveAPIView,
     StaffAccountDetailsDeleteAPIView,
-)
+    
+    StaffQualificationCreateAPIView,
+    StaffQualificationListAPIView,
+    StaffQualificationRetrieveAPIView,
+    StaffQualificationUpdateAPIView,
+    StaffQualificationDeleteAPIView,
+    StaffQualificationToggleAPIView,
+     LwfEntryCreateAPIView,
+    LwfEntryListAPIView,
+    LwfEntryRetrieveAPIView,
+    LwfEntryUpdateAPIView,
+    LwfEntryDeleteAPIView,
 
+    ProfessionalTaxCreateAPIView,
+    ProfessionalTaxListAPIView,
+    ProfessionalTaxRetrieveAPIView,
+    ProfessionalTaxUpdateAPIView,
+    ProfessionalTaxDeleteAPIView,
+
+    LeaveMasterCreateAPIView,
+    LeaveMasterListAPIView,
+    LeaveMasterRetrieveAPIView,
+    LeaveMasterUpdateAPIView,
+    LeaveMasterDeleteAPIView,
+
+    ReasonCreateAPIView,
+    ReasonListAPIView,
+    ReasonRetrieveAPIView,
+    ReasonUpdateAPIView,
+    ReasonDeleteAPIView,
+
+    PayCycleCreateAPIView,
+    PayCycleListAPIView,
+    PayCycleRetrieveAPIView,
+    PayCycleUpdateAPIView,
+    PayCycleDeleteAPIView,
+
+      SalaryCategoryCreateAPIView,
+    SalaryCategoryListAPIView,
+    SalaryCategoryRetrieveAPIView,
+    SalaryCategoryUpdateAPIView,
+    SalaryCategoryDeleteAPIView,
+
+    GradeDropdownAPIView,
+    GradeMasterCreateAPIView,
+    GradeMasterListAPIView,
+    GradeMasterRetrieveAPIView,
+    GradeMasterUpdateAPIView,
+    GradeMasterDeleteAPIView,
+
+     BandMasterCreateAPIView,
+    BandMasterListAPIView,
+    BandMasterRetrieveAPIView,
+    BandMasterUpdateAPIView,
+    BandMasterDeleteAPIView,
+
+    LevelMasterCreateAPIView,
+    LevelMasterListAPIView,
+    LevelMasterRetrieveAPIView,
+    LevelMasterUpdateAPIView,
+    LevelMasterDeleteAPIView,
+
+)
 
 urlpatterns = [
     # DEPARTMENT URLs - RESTful Pattern
@@ -85,4 +146,349 @@ urlpatterns = [
     path('staff-account/create/', StaffAccountDetailsCreateAPIView.as_view(), name='staff-account-create'),
     path('staff-account/<int:staff_acc_id>/', StaffAccountDetailsRetrieveAPIView.as_view(), name='staff-account-detail'),
     path('staff-account/<int:staff_acc_id>/delete/', StaffAccountDetailsDeleteAPIView.as_view(), name='staff-account-delete'),
+
+
+    # CREATE
+    path(
+        'qualification/create/',
+        StaffQualificationCreateAPIView.as_view(),
+        name='qualification-create'
+    ),
+
+    # LIST
+    path(
+        'qualification/list/',
+        StaffQualificationListAPIView.as_view(),
+        name='qualification-list'
+    ),
+
+    # RETRIEVE
+    path(
+        'qualification/retrieve/<int:staff_qual_id>/',
+        StaffQualificationRetrieveAPIView.as_view(),
+        name='qualification-retrieve'
+    ),
+
+    # UPDATE
+    path(
+        'qualification/update/<int:staff_qual_id>/',
+        StaffQualificationUpdateAPIView.as_view(),
+        name='qualification-update'
+    ),
+
+    # DELETE
+    path(
+        'qualification/delete/<int:staff_qual_id>/',
+        StaffQualificationDeleteAPIView.as_view(),
+        name='qualification-delete'
+    ),
+    path(
+        'qualification/toggle/<int:staff_qual_id>/',
+        StaffQualificationToggleAPIView.as_view(),
+        name='qualification-toggle'
+    ),
+
+     # CREATE
+    path(
+        'lwf-entry/create/',
+        LwfEntryCreateAPIView.as_view(),
+        name='lwf-entry-create'
+    ),
+
+    # LIST
+    path(
+        'lwf-entry/list/',
+        LwfEntryListAPIView.as_view(),
+        name='lwf-entry-list'
+    ),
+
+    # RETRIEVE
+    path(
+        'lwf-entry/retrieve/<int:lwf_id>/',
+        LwfEntryRetrieveAPIView.as_view(),
+        name='lwf-entry-retrieve'
+    ),
+
+    # UPDATE
+    path(
+        'lwf-entry/update/<int:lwf_id>/',
+        LwfEntryUpdateAPIView.as_view(),
+        name='lwf-entry-update'
+    ),
+
+    # DELETE
+    path(
+        'lwf-entry/delete/<int:lwf_id>/',
+        LwfEntryDeleteAPIView.as_view(),
+        name='lwf-entry-delete'
+    ),
+    
+      # CREATE
+    path(
+        'prof-tax/create/',
+        ProfessionalTaxCreateAPIView.as_view(),
+        name='prof-tax-create'
+    ),
+
+    # LIST
+    path(
+        'prof-tax/list/',
+        ProfessionalTaxListAPIView.as_view(),
+        name='prof-tax-list'
+    ),
+
+    # RETRIEVE
+    path(
+        'prof-tax/retrieve/<int:id>/',
+        ProfessionalTaxRetrieveAPIView.as_view(),
+        name='prof-tax-retrieve'
+    ),
+
+    # UPDATE
+    path(
+        'prof-tax/update/<int:id>/',
+        ProfessionalTaxUpdateAPIView.as_view(),
+        name='prof-tax-update'
+    ),
+
+    # DELETE
+    path(
+        'prof-tax/delete/<int:id>/',
+        ProfessionalTaxDeleteAPIView.as_view(),
+        name='prof-tax-delete'
+    ),
+
+    # CREATE
+    path(
+        'leave-master/create/',
+        LeaveMasterCreateAPIView.as_view(),
+        name='leave-master-create'
+    ),
+
+    # LIST
+    path(
+        'leave-master/list/',
+        LeaveMasterListAPIView.as_view(),
+        name='leave-master-list'
+    ),
+
+    # RETRIEVE
+    path(
+        'leave-master/retrieve/<int:id>/',
+        LeaveMasterRetrieveAPIView.as_view(),
+        name='leave-master-retrieve'
+    ),
+
+    # UPDATE
+    path(
+        'leave-master/update/<int:id>/',
+        LeaveMasterUpdateAPIView.as_view(),
+        name='leave-master-update'
+    ),
+
+    # DELETE
+    path(
+        'leave-master/delete/<int:id>/',
+        LeaveMasterDeleteAPIView.as_view(),
+        name='leave-master-delete'
+    ),
+    # REASON
+    path(
+        'reason/create/',
+        ReasonCreateAPIView.as_view(),
+        name='reason-create'
+    ),
+    path(
+        'reason/list/',
+        ReasonListAPIView.as_view(),
+        name='reason-list'
+    ),
+    path(
+        'reason/retrieve/<int:pk>/',
+        ReasonRetrieveAPIView.as_view(),
+        name='reason-retrieve'
+    ),
+    path(
+        'reason/update/<int:pk>/',
+        ReasonUpdateAPIView.as_view(),
+        name='reason-update'
+    ),
+    path(
+        'reason/delete/<int:pk>/',
+        ReasonDeleteAPIView.as_view(),
+        name='reason-delete'
+    ),
+
+    path(
+        "pay-cycle/create/",
+        PayCycleCreateAPIView.as_view(),
+        name="pay-cycle-create"
+    ),
+
+    path(
+        "pay-cycle/list/",
+        PayCycleListAPIView.as_view(),
+        name="pay-cycle-list"
+    ),
+
+    path(
+        "pay-cycle/<int:pk>/",
+        PayCycleRetrieveAPIView.as_view(),
+        name="pay-cycle-detail"
+    ),
+
+    path(
+        "pay-cycle/update/<int:pk>/",
+        PayCycleUpdateAPIView.as_view(),
+        name="pay-cycle-update"
+    ),
+
+    path(
+        "pay-cycle/delete/<int:pk>/",
+        PayCycleDeleteAPIView.as_view(),
+        name="pay-cycle-delete"
+    ),
+
+     # CREATE
+    path(
+        "salary-category/create/",
+        SalaryCategoryCreateAPIView.as_view(),
+        name="salary-category-create"
+    ),
+
+    # LIST
+    path(
+        "salary-category/list/",
+        SalaryCategoryListAPIView.as_view(),
+        name="salary-category-list"
+    ),
+
+    # RETRIEVE
+    path(
+        "salary-category/<int:pk>/",
+        SalaryCategoryRetrieveAPIView.as_view(),
+        name="salary-category-detail"
+    ),
+
+    # UPDATE
+    path(
+        "salary-category/update/<int:pk>/",
+        SalaryCategoryUpdateAPIView.as_view(),
+        name="salary-category-update"
+    ),
+
+    # DELETE
+    path(
+        "salary-category/delete/<int:pk>/",
+        SalaryCategoryDeleteAPIView.as_view(),
+        name="salary-category-delete"
+    ),
+
+
+    # GRADE DROPDOWN (used by Designation form)
+    path(
+        "grades/",
+        GradeDropdownAPIView.as_view(),
+        name="grade-dropdown"
+    ),
+
+    # GRADE MASTER CRUD
+    path(
+        "grade-master/list/",
+        GradeMasterListAPIView.as_view(),
+        name="grade-master-list"
+    ),
+    path(
+        "grade-master/create/",
+        GradeMasterCreateAPIView.as_view(),
+        name="grade-master-create"
+    ),
+    path(
+        "grade-master/retrieve/<int:pk>/",
+        GradeMasterRetrieveAPIView.as_view(),
+        name="grade-master-detail"
+    ),
+    path(
+        "grade-master/update/<int:pk>/",
+        GradeMasterUpdateAPIView.as_view(),
+        name="grade-master-update"
+    ),
+    path(
+        "grade-master/delete/<int:pk>/",
+        GradeMasterDeleteAPIView.as_view(),
+        name="grade-master-delete"
+    ),
+
+
+    # CREATE
+    path(
+        "band-master/create/",
+        BandMasterCreateAPIView.as_view(),
+        name="band-master-create"
+    ),
+
+    # LIST
+    path(
+        "band-master/list/",
+        BandMasterListAPIView.as_view(),
+        name="band-master-list"
+    ),
+
+    # RETRIEVE
+    path(
+        "band-master/<int:pk>/",
+        BandMasterRetrieveAPIView.as_view(),
+        name="band-master-detail"
+    ),
+
+    # UPDATE
+    path(
+        "band-master/update/<int:pk>/",
+        BandMasterUpdateAPIView.as_view(),
+        name="band-master-update"
+    ),
+
+    # DELETE
+    path(
+        "band-master/delete/<int:pk>/",
+        BandMasterDeleteAPIView.as_view(),
+        name="band-master-delete"
+    ),
+
+
+    # CREATE
+    path(
+        "level-master/create/",
+        LevelMasterCreateAPIView.as_view(),
+        name="level-master-create"
+    ),
+
+    # LIST
+    path(
+        "level-master/list/",
+        LevelMasterListAPIView.as_view(),
+        name="level-master-list"
+    ),
+
+    # RETRIEVE
+    path(
+        "level-master/retrieve/<int:pk>/",
+        LevelMasterRetrieveAPIView.as_view(),
+        name="level-master-detail"
+    ),
+
+    # UPDATE
+    path(
+        "level-master/update/<int:pk>/",
+        LevelMasterUpdateAPIView.as_view(),
+        name="level-master-update"
+    ),
+
+    # DELETE
+    path(
+        "level-master/delete/<int:pk>/",
+        LevelMasterDeleteAPIView.as_view(),
+        name="level-master-delete"
+    ),
+
 ]

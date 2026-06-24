@@ -113,6 +113,7 @@ project_patterns = [
 dropdown_patterns = [
     path('countries/dropdown/', views.get_countries, name='countries-dropdown'),
     path('states/by-country/<int:country_id>/', views.get_states_by_country, name='states-by-country'),
+    path('projects/dropdown/', views.get_projects_dropdown, name='projects-dropdown'),
     path('projects/company-dropdown/', views.get_companies, name='projects-company-dropdown'),
     path('projects/application-types/', views.get_application_types, name='projects-application-types'),
     path('documents/types/', views.get_document_types, name='document-types'),

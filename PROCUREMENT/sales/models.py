@@ -10,6 +10,9 @@ from purchase_master.models import ProductCreation as ProductMaster
 from purchase_master.models import ItemGroup
 from purchase_master.models import SubGroup
 from purchase_master.models import UnitMaster
+from purchase_master.models import ExpenseCategory
+from purchase_master.models import ExpenseSubCategory
+from purchase_master.models import PaymentCategory
 from purchase_entrys.models import Supplier
 
 
@@ -112,6 +115,24 @@ class OrderedBOM(UniqueIDMixin):
     material_type = models.CharField(max_length=50, choices=MATERIAL_TYPE)
 
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class OrderedBOMDocument(UniqueIDMixin):
+    bom = models.ForeignKey(
+        OrderedBOM,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+    document_type = models.CharField(max_length=100)
+    document_name = models.CharField(max_length=255, blank=True)
+    file = models.FileField(upload_to="procurement/ordered-bom/documents/")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta(UniqueIDMixin.Meta):
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return self.document_name or self.file.name
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>> Purchase Expense >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -258,17 +279,29 @@ class SalesInvoiceItem(UniqueIDMixin):
         return f"{self.sales_invoice} - {product_name}"
 
 
+class SalesInvoiceDocument(UniqueIDMixin):
+    sales_invoice = models.ForeignKey(
+        SalesInvoice,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+    document_type = models.CharField(max_length=100)
+    document_name = models.CharField(max_length=255, blank=True)
+    file = models.FileField(upload_to="procurement/sales-invoices/documents/")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta(UniqueIDMixin.Meta):
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return self.document_name or self.file.name
+
+
 class PurchaseExpense(UniqueIDMixin):
     STATUS_CHOICES = (
         ("draft", "Draft"),
         ("approved", "Approved"),
         ("rejected", "Rejected"),
-    )
-
-    PAYMENT_TYPE_CHOICES = (
-        ("cash", "Cash"),
-        ("credit", "Credit"),
-        ("bank", "Bank"),
     )
 
     expense_date = models.DateField()
@@ -289,20 +322,27 @@ class PurchaseExpense(UniqueIDMixin):
     supplier_manual_entry = models.BooleanField(default=False)
     manual_supplier_name = models.CharField(max_length=255, blank=True, null=True)
     category = models.ForeignKey(
-        ItemGroup,
+        ExpenseCategory,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         db_constraint=False,
     )
     sub_category = models.ForeignKey(
-        SubGroup,
+        ExpenseSubCategory,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         db_constraint=False,
     )
-    payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPE_CHOICES)
+    payment_type = models.ForeignKey(
+        PaymentCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_constraint=False,
+    )
+    from_company = models.BooleanField(default=False)
     expense_number = models.CharField(max_length=100, unique=True, blank=True)
     remarks = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")

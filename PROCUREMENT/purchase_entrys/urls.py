@@ -72,6 +72,11 @@ purchase_order_patterns = [
 
 purchase_requisition_patterns = [
     path(
+        "purchase-requisitions/sublist/",
+        views.purchase_requisition_sublist,
+        name="purchase-requisition-sublist",
+    ),
+    path(
         "purchase-requisitions/",views.purchase_requisition_approval_list,name="purchase-requisition-approval-list",),
     path(
         "purchase-requisitions/create/", views.create_purchase_requisition,name="purchase-requisition-create",),

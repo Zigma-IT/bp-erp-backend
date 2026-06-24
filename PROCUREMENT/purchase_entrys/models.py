@@ -6,11 +6,18 @@ from decimal import Decimal
 
 from django.db import models
 from django.utils import timezone
-from common_master.models import Company as CompanyMaster
-from common_master.models import Project as ProjectMaster
-from common_master.models import SupplierProfile as SupplierMaster
-from common_master.models import Tax as TaxMaster
-from purchase_master.models import ItemMaster
+
+
+def business_code_field(**kwargs):
+    defaults = {
+        "max_length": 50,
+        "blank": True,
+        "null": True,
+        "db_index": True,
+    }
+    defaults.update(kwargs)
+    return models.CharField(**defaults)
+
 
 class UniqueIDMixin(models.Model):
     unique_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
@@ -21,20 +28,49 @@ class UniqueIDMixin(models.Model):
 
 # Rate order
 class RateOrder(UniqueIDMixin):
+    class ApprovalStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
 
     STATUS_CHOICES = (
         ('active', 'Active'),
         ('inactive', 'Inactive'),
     )
 
-    supplier = models.ForeignKey('Supplier', on_delete=models.CASCADE)
+    supplier_code = business_code_field()
+    supplier_name = models.CharField(max_length=255, blank=True, null=True)
+    company_code = business_code_field()
+    project_code = business_code_field()
 
     # Line rows are stored on the header so procurement no longer needs a
     # separate rate-order line table.
     items_data = models.JSONField(default=list, blank=True)
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
-
+    approval_status = models.CharField(
+        max_length=20,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.PENDING,
+    )
+    approved_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_rate_orders',
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejected_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rejected_rate_orders',
+    )
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    approval_remarks = models.TextField(blank=True, null=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -60,6 +96,7 @@ class RateOrderDocument(UniqueIDMixin):
 
 
 class Supplier(UniqueIDMixin):
+    supplier_code = business_code_field(unique=True)
     name = models.CharField(max_length=255, unique=True)
     gst_no = models.CharField(max_length=20, blank=True, null=True)
     pan_no = models.CharField(max_length=20, blank=True, null=True)
@@ -91,21 +128,10 @@ class PurchaseOrder(UniqueIDMixin):
         REJECTED_L3 = "rejected_l3", "Rejected (L3)"
 
     po_number = models.CharField(max_length=100, unique=True, blank=True)
-    company = models.ForeignKey(
-        CompanyMaster,
-        on_delete=models.PROTECT,
-        related_name="purchase_orders",
-    )
-    project = models.ForeignKey(
-        ProjectMaster,
-        on_delete=models.PROTECT,
-        related_name="purchase_orders",
-    )
-    supplier = models.ForeignKey(
-        Supplier,
-        on_delete=models.PROTECT,
-        related_name="purchase_orders",
-    )
+    company_code = business_code_field()
+    project_code = business_code_field()
+    supplier_code = business_code_field()
+    supplier_name = models.CharField(max_length=255, blank=True, null=True)
 
     # Purchase-order lines live in JSON on the header so the API still exposes
     # an `items` array without maintaining a separate item table.
@@ -142,13 +168,7 @@ class PurchaseOrder(UniqueIDMixin):
         decimal_places=2,
         default=Decimal("0.00"),
     )
-    freight_tax = models.ForeignKey(
-        TaxMaster,
-        on_delete=models.PROTECT,
-        related_name="freight_purchase_orders",
-        blank=True,
-        null=True,
-    )
+    freight_tax_code = business_code_field()
     freight_tax_amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -159,13 +179,7 @@ class PurchaseOrder(UniqueIDMixin):
         decimal_places=2,
         default=Decimal("0.00"),
     )
-    other_tax = models.ForeignKey(
-        TaxMaster,
-        on_delete=models.PROTECT,
-        related_name="other_charge_purchase_orders",
-        blank=True,
-        null=True,
-    )
+    other_tax_code = business_code_field()
     other_tax_amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -176,13 +190,7 @@ class PurchaseOrder(UniqueIDMixin):
         decimal_places=2,
         default=Decimal("0.00"),
     )
-    packing_tax = models.ForeignKey(
-        TaxMaster,
-        on_delete=models.PROTECT,
-        related_name="packing_purchase_orders",
-        blank=True,
-        null=True,
-    )
+    packing_tax_code = business_code_field()
     packing_tax_amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -230,30 +238,11 @@ class PurchaseOrder(UniqueIDMixin):
         except ValueError:
             return str(self.workflow_status)
 
-    def clean_snapshot_fields(self):
-        try:
-            supplier = self.supplier
-        except Supplier.DoesNotExist:
-            return
-        if supplier.pk is None:
-            return
-
-        self.supplier_gst_no = self.supplier_gst_no or (supplier.gst_no or "")
-        self.supplier_pan_no = self.supplier_pan_no or (supplier.pan_no or "")
-        self.supplier_msme_type = self.supplier_msme_type or (supplier.msme_type or "")
-        self.supplier_msme_no = self.supplier_msme_no or (supplier.msme_no or "")
-        self.supplier_contact_person = self.supplier_contact_person or (
-            supplier.contact_person or ""
-        )
-        self.supplier_contact_no = self.supplier_contact_no or (
-            supplier.contact_no or ""
-        )
-
     def generate_po_number(self):
         entry_date = self.entry_date or timezone.localdate()
         fy_start = entry_date.year if entry_date.month >= 4 else entry_date.year - 1
         fy_end = fy_start + 1
-        company_code = (self.company.code or "GEN").upper()
+        company_code = (self.company_code or "GEN").upper()
         prefix = f"PO/{fy_start}-{fy_end}/{company_code}"
 
         last_po_number = (
@@ -303,12 +292,7 @@ class PurchaseOrder(UniqueIDMixin):
             self.save(update_fields=["workflow_status", "updated_at"])
 
     def save(self, *args, **kwargs):
-        self.clean_snapshot_fields()
-        try:
-            company = self.company
-        except CompanyMaster.DoesNotExist:
-            company = None
-        if not self.po_number and company and company.pk is not None:
+        if not self.po_number:
             self.po_number = self.generate_po_number()
         super().save(*args, **kwargs)
 
@@ -399,8 +383,8 @@ class PurchaseRequisition(UniqueIDMixin):
 
     pr_number = models.CharField(max_length=100, unique=True, blank=True)
 
-    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE)
-    project = models.ForeignKey(ProjectMaster, on_delete=models.CASCADE)
+    company_code = business_code_field()
+    project_code = business_code_field()
 
     requisition_for = models.CharField(max_length=100)   # Direct / Indirect
     requisition_type = models.CharField(max_length=100)  # Regular / Service
@@ -453,7 +437,7 @@ class PurchaseRequisition(UniqueIDMixin):
             else requisition_date.year - 1
         )
         fy_end = fy_start + 1
-        company_code = (self.company.code or "GEN").upper()
+        company_code = (self.company_code or "GEN").upper()
         prefix = f"PR/{fy_start}-{fy_end}/{company_code}"
 
         last_pr_number = (
@@ -475,11 +459,7 @@ class PurchaseRequisition(UniqueIDMixin):
         return f"{prefix}/{next_number:03d}"
 
     def save(self, *args, **kwargs):
-        try:
-            company = self.company
-        except CompanyMaster.DoesNotExist:
-            company = None
-        if not self.pr_number and company and company.pk is not None:
+        if not self.pr_number:
             self.pr_number = self.generate_pr_number()
         super().save(*args, **kwargs)
 
@@ -517,12 +497,13 @@ class GRN(UniqueIDMixin):
 
     grn_number = models.CharField(max_length=100, unique=True, blank=True)
 
-    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE)
-    project = models.ForeignKey(ProjectMaster, on_delete=models.CASCADE)
+    company_code = business_code_field()
+    project_code = business_code_field()
 
     po = models.ForeignKey('PurchaseOrder', on_delete=models.CASCADE)
 
-    supplier = models.ForeignKey('Supplier', on_delete=models.CASCADE)
+    supplier_code = business_code_field()
+    supplier_name = models.CharField(max_length=255, blank=True, null=True)
     items_data = models.JSONField(default=list, blank=True)
 
     invoice_date = models.DateField()
@@ -574,7 +555,7 @@ class GRN(UniqueIDMixin):
         invoice_date = self.invoice_date or timezone.localdate()
         fy_start = invoice_date.year if invoice_date.month >= 4 else invoice_date.year - 1
         fy_end = fy_start + 1
-        company_code = (self.company.code or "GEN").upper()
+        company_code = (self.company_code or "GEN").upper()
         prefix = f"GRN/{fy_start}-{fy_end}/{company_code}"
 
         last_grn_number = (
@@ -596,11 +577,7 @@ class GRN(UniqueIDMixin):
         return f"{prefix}/{next_number:03d}"
 
     def save(self, *args, **kwargs):
-        try:
-            company = self.company
-        except CompanyMaster.DoesNotExist:
-            company = None
-        if not self.grn_number and company and company.pk is not None:
+        if not self.grn_number:
             self.grn_number = self.generate_grn_number()
         super().save(*args, **kwargs)
 
@@ -620,11 +597,12 @@ class SRN(UniqueIDMixin):
 
     srn_number = models.CharField(max_length=100, unique=True, blank=True)
 
-    company = models.ForeignKey(CompanyMaster, on_delete=models.CASCADE)
-    project = models.ForeignKey(ProjectMaster, on_delete=models.CASCADE)
+    company_code = business_code_field()
+    project_code = business_code_field()
 
     po = models.ForeignKey('PurchaseOrder', on_delete=models.CASCADE)
-    supplier = models.ForeignKey('Supplier', on_delete=models.CASCADE)
+    supplier_code = business_code_field()
+    supplier_name = models.CharField(max_length=255, blank=True, null=True)
     items_data = models.JSONField(default=list, blank=True)
 
     # 🔹 Dates
@@ -711,7 +689,7 @@ class SRN(UniqueIDMixin):
         invoice_date = self.invoice_date or timezone.localdate()
         fy_start = invoice_date.year if invoice_date.month >= 4 else invoice_date.year - 1
         fy_end = fy_start + 1
-        company_code = (self.company.code or "GEN").upper()
+        company_code = (self.company_code or "GEN").upper()
         prefix = f"SRN/{fy_start}-{fy_end}/{company_code}"
 
         last_srn_number = (
@@ -733,11 +711,7 @@ class SRN(UniqueIDMixin):
         return f"{prefix}/{next_number:03d}"
 
     def save(self, *args, **kwargs):
-        try:
-            company = self.company
-        except CompanyMaster.DoesNotExist:
-            company = None
-        if not self.srn_number and company and company.pk is not None:
+        if not self.srn_number:
             self.srn_number = self.generate_srn_number()
         super().save(*args, **kwargs)
     
@@ -745,7 +719,8 @@ class SRNItem(UniqueIDMixin):
 
     srn = models.ForeignKey(SRN, related_name='items', on_delete=models.CASCADE)
 
-    item = models.ForeignKey(ItemMaster, on_delete=models.CASCADE)
+    item_code = business_code_field()
+    item_name = models.CharField(max_length=255, blank=True, null=True)
 
     order_qty = models.DecimalField(max_digits=10, decimal_places=2)
     previously_received_qty = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))

@@ -20,12 +20,18 @@ router.extra_api_root_dict = OrderedDict ({
 sales_order_patterns = [
     path("sales-orders/", views.sales_order_list, name="sales-order-list"),
     path("sales-orders/<int:pk>/", views.sales_order_detail, name="sales-order-detail"),
+    path("ordered-bom/", views.ordered_bom_list, name="ordered-bom-list"),
+    path("ordered-bom/<int:pk>/", views.ordered_bom_detail, name="ordered-bom-detail"),
+    path("ordered-bom/<int:pk>/documents/", views.ordered_bom_documents, name="ordered-bom-documents"),
+    path("ordered-bom/<int:pk>/documents/<int:document_id>/", views.ordered_bom_document_delete, name="ordered-bom-document-delete"),
 ]
 
 # Sales invoice endpoints
 sales_invoice_patterns = [
     path("sales-invoices/", views.sales_invoice_list, name="sales-invoice-list"),
     path("sales-invoices/<int:pk>/", views.sales_invoice_detail, name="sales-invoice-detail"),
+    path("sales-invoices/<int:pk>/documents/", views.sales_invoice_documents, name="sales-invoice-documents"),
+    path("sales-invoices/<int:pk>/documents/<int:document_id>/", views.sales_invoice_document_delete, name="sales-invoice-document-delete"),
 ]
 
 purchase_expense_patterns = [
@@ -48,5 +54,4 @@ dropdown_patterns = [
 
 # Combine all patterns
 urlpatterns = sales_order_patterns + sales_invoice_patterns + purchase_expense_patterns + dropdown_patterns
-
 

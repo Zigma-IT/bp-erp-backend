@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     'common_master',
     'purchase_master',
     'purchase_entrys',
+    'purchase_expense',
     'sales',
     'login_home',
     'approvals',
@@ -133,16 +134,18 @@ TEMPLATES = [
     },
 ]
 
+
 # --------------------------------------------------
 # DATABASE
 # --------------------------------------------------
+
 
 DATABASES = {
 
     # REQUIRED DEFAULT DATABASE
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'procurement_db',
+        'NAME': 'procurement_db1',
         'USER': 'root',
         'PASSWORD': 'admin@123',
         'HOST': '127.0.0.1',
@@ -154,9 +157,9 @@ DATABASES = {
     },
 
     # OPTIONAL SECOND ALIAS
-    'procurement_db': {
+    'procurement_db1': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'procurement_db',
+        'NAME': 'procurement_db1',
         'USER': 'root',
         'PASSWORD': 'admin@123',
         'HOST': '127.0.0.1',
@@ -168,9 +171,9 @@ DATABASES = {
     },
 
     # Historical alias if needed
-    'masters_db': {
+    'masters_db1': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'masters_db',
+        'NAME': 'masters_db1',
         'USER': 'root',
         'PASSWORD': 'admin@123',
         'HOST': '127.0.0.1',
@@ -183,13 +186,23 @@ DATABASES = {
     },
 }
 
+
 # --------------------------------------------------
 # DATABASE ROUTERS
 # --------------------------------------------------
 
+
 DATABASE_ROUTERS = [
     'PROCUREMENT.dbrouters.AuthRouter',
 ]
+
+# During test runs we let Django build purchase_entrys directly from the
+# refactored models so the legacy cross-database migration history does not
+# block fresh database setup.
+if any(arg == "test" for arg in sys.argv):
+    MIGRATION_MODULES = {
+        "purchase_entrys": "purchase_entrys.test_migrations",
+    }
 
 # --------------------------------------------------
 # DJANGO REST FRAMEWORK

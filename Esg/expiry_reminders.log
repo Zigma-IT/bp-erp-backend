@@ -1,0 +1,16 @@
+2026-06-10 09:32:05,754 INFO compliance_register.management.commands.check_expiry_reminders Expiry reminder command started for 2026-06-10
+2026-06-10 09:32:34,600 INFO compliance_register.management.commands.check_expiry_reminders Expiry reminder command started for 2026-06-10
+2026-06-10 09:32:34,717 INFO compliance_register.management.commands.check_expiry_reminders Creating missing ESG history for entry 3
+2026-06-10 09:32:34,723 INFO compliance_register.management.commands.check_expiry_reminders Creating missing ESG history for entry 2
+2026-06-10 09:32:34,727 INFO compliance_register.management.commands.check_expiry_reminders Creating missing ESG history for entry 1
+2026-06-10 09:37:59,053 INFO compliance_register.management.commands.check_expiry_reminders Expiry reminder command started for 2026-06-10
+2026-06-10 09:37:59,169 INFO compliance_register.management.commands.check_expiry_reminders Creating missing ESG history for entry 3
+2026-06-10 09:37:59,175 INFO compliance_register.management.commands.check_expiry_reminders Creating missing ESG history for entry 2
+2026-06-10 09:37:59,179 INFO compliance_register.management.commands.check_expiry_reminders Creating missing ESG history for entry 1
+2026-06-10 09:37:59,183 INFO compliance_register.management.commands.check_expiry_reminders Updating insurance detail 1 status: active -> expired
+2026-06-10 09:37:59,183 INFO compliance_register.management.commands.check_expiry_reminders Skipping insurance detail 1 email; recipient email empty
+2026-06-10 09:37:59,183 INFO compliance_register.management.commands.check_expiry_reminders Updating insurance detail 2 status: active -> expired
+2026-06-10 09:37:59,184 INFO compliance_register.management.commands.check_expiry_reminders Skipping insurance detail 2 email; recipient email empty
+2026-06-10 09:37:59,184 INFO compliance_register.management.commands.check_expiry_reminders Updating insurance detail 3 status: active -> expired
+2026-06-10 09:37:59,184 INFO compliance_register.management.commands.check_expiry_reminders Skipping insurance detail 3 email; recipient email empty
+2026-06-10 09:37:59,185 INFO compliance_register.management.commands.check_expiry_reminders Expiry reminder command finished. ESG processed=3, insurance processed=4

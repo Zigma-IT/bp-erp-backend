@@ -10,6 +10,9 @@ urlpatterns = [
     # ✅ Purchase procurement routes (ONLY ONE)
     path("api/purchase/", include("purchase_entrys.urls")),
 
+    # Purchase expense routes
+    path("api/purchase-expense/", include("purchase_expense.urls")),
+
     # Sales routes
     path("api/sales/", include("sales.urls")),
 

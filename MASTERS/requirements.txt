@@ -3,7 +3,6 @@ babel==2.17.0
 bcrypt==4.2.0
 beautifulsoup4==4.13.4
 blinker==1.9.0
-Brlapi==0.8.6
 certifi==2025.1.31
 chardet==5.2.0
 charset-normalizer==3.4.2
@@ -90,4 +89,5 @@ websockets==15.0.1
 wheel==0.46.1
 xdg==5
 xlrd==2.0.1
+openpyxl==3.1.2
 yt-dlp==2025.4.30

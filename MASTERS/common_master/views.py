@@ -629,6 +629,12 @@ def get_companies(request):
 
 
 @api_view(["GET"])
+def get_projects_dropdown(request):
+    projects = Project.objects.filter(is_active=True).order_by("name").values("id", "name")
+    return Response(list(projects))
+
+
+@api_view(["GET"])
 def get_application_types(request):
     queryset = CommonMaster.objects.filter(
         Q(type="APPLICATION_TYPE")

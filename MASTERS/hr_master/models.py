@@ -25,6 +25,7 @@ class DepartmentCreation(models.Model):
 
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
+    
 
     class Meta:
         db_table = "department_creation"
@@ -37,13 +38,42 @@ class DepartmentCreation(models.Model):
 
 class DesignationCreation(models.Model):
 
+    STRUCTURE_CHOICES = (
+        ('Grade Based', 'Grade Based'),
+        ('Band Based', 'Band Based'),
+    )
+
     unique_id = models.UUIDField(
         default=uuid.uuid4,
         editable=False,
         unique=True
     )
 
-    grade_type = models.CharField(max_length=255)
+    structure_type = models.CharField(
+        max_length=50,
+        choices=STRUCTURE_CHOICES,
+        default='Grade Based'
+    )
+
+    grade_type = models.CharField(max_length=255, blank=True, default='')
+
+    band = models.ForeignKey(
+        'BandMaster',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='band_id',
+        related_name='designations'
+    )
+
+    level = models.ForeignKey(
+        'LevelMaster',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='level_id',
+        related_name='designations'
+    )
 
     designation = models.CharField(max_length=255)
 
@@ -425,7 +455,7 @@ class StaffDependentDetails(models.Model):
         null=True,
         blank=True
     )
-
+    
     existing_insurance = models.CharField(
         max_length=100,
         null=True,
@@ -606,3 +636,744 @@ class StaffAccountDetails(models.Model):
 
     def __str__(self):
         return self.accountant_name
+
+class StaffQualificationDetails(models.Model):
+
+    staff_qual_id = models.AutoField(primary_key=True)
+
+    unique_id = models.CharField(max_length=50)
+
+    staff_unique_id = models.CharField(max_length=50)
+
+    education_type = models.CharField(max_length=50)
+
+    degree = models.CharField(max_length=50)
+
+    college_name = models.CharField(max_length=100)
+
+    year_passing = models.CharField(max_length=50)
+
+    percentage = models.CharField(max_length=50)
+
+    university = models.CharField(max_length=100)
+
+    doc_name = models.TextField(
+        blank=True,
+        null=True
+    )
+
+    is_active = models.IntegerField(default=1)
+
+    is_delete = models.IntegerField(default=0)
+
+    updated = models.DateTimeField(auto_now=True)
+
+    created = models.DateTimeField(auto_now_add=True)
+
+    acc_year = models.CharField(max_length=50)
+
+    session_id = models.CharField(max_length=50)
+
+    sess_user_type = models.CharField(max_length=50)
+
+    sess_user_id = models.CharField(max_length=50)
+
+    sess_company_id = models.CharField(max_length=50)
+
+    sess_branch_id = models.CharField(max_length=50)
+
+    class Meta:
+
+        db_table = 'staff_qualification_details'
+
+    def __str__(self):
+
+        return self.unique_id
+
+
+class LwfEntry(models.Model):
+
+    lwf_id = models.AutoField(primary_key=True)
+
+    unique_id = models.CharField(
+        max_length=50,
+        unique=True
+    )
+
+    project_id = models.CharField(
+        max_length=50
+    )
+
+    state = models.CharField(
+        max_length=50
+    )
+
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    deduction_frequency = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    deduction_months = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+
+    employer_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    excluded_designations = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+
+    effective_from = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    is_active = models.IntegerField(
+        default=1
+    )
+
+    is_delete = models.IntegerField(
+        default=0
+    )
+
+    updated = models.DateTimeField(
+        auto_now=True
+    )
+
+    created = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    acc_year = models.CharField(
+        max_length=50
+    )
+
+    session_id = models.CharField(
+        max_length=50
+    )
+
+    sess_user_type = models.CharField(
+        max_length=50
+    )
+
+    sess_user_id = models.CharField(
+        max_length=50
+    )
+
+    sess_company_id = models.CharField(
+        max_length=50
+    )
+
+    sess_branch_id = models.CharField(
+        max_length=50
+    )
+
+    class Meta:
+
+        db_table = "lwf_entry"
+
+    def __str__(self):
+
+        return self.unique_id
+class ProfessionalTax(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    unique_id = models.CharField(
+        max_length=50,
+        unique=True
+    )
+
+    project_id = models.CharField(
+        max_length=255
+    )
+
+    state = models.CharField(
+        max_length=100
+    )
+
+    salary_from = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    salary_to = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    gender = models.CharField(
+        max_length=20,
+        default='All'
+    )
+
+    deduction_frequency = models.CharField(
+        max_length=50
+    )
+
+    period_start_month = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True
+    )
+
+    period_end_month = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True
+    )
+
+    deduction_month = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True
+    )
+
+    special_month = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True
+    )
+
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+
+    annual_cap = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    acc_year = models.CharField(max_length=50)
+
+    session_id = models.CharField(max_length=50)
+
+    sess_user_type = models.CharField(max_length=50)
+
+    sess_user_id = models.CharField(max_length=50)
+
+    sess_company_id = models.CharField(max_length=50)
+
+    sess_branch_id = models.CharField(max_length=50)
+
+    is_active = models.BooleanField(default=True)
+
+    is_delete = models.BooleanField(default=False)
+
+    created = models.DateTimeField(auto_now_add=True)
+
+    updated = models.DateTimeField(auto_now=True)
+
+    is_salary_slab = models.BooleanField(default=False)
+
+    is_gender_bound = models.BooleanField(default=False)
+
+    is_special_month = models.BooleanField(default=False)
+
+    is_annual_cap = models.BooleanField(default=False)
+
+    special_amt = models.IntegerField(
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+
+        db_table = "prof_tax"
+
+    def __str__(self):
+
+        return self.unique_id
+
+class LeaveMasterCreation(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    unique_id = models.CharField(max_length=50)
+
+    leave_type = models.CharField(max_length=100)
+
+    policy_unique_id = models.CharField(
+        max_length=30,
+        null=True,
+        blank=True
+    )
+
+    annual_entitlement = models.BooleanField(default=False)
+
+    balance_handling = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    max_carry_forward = models.IntegerField(default=0)
+
+    accrual_method = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    accrual_monthly_value = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0
+    )
+
+    gender_applicable = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    min_service_months = models.IntegerField(default=0)
+
+    max_occurrences_per_year = models.IntegerField(default=0)
+
+    half_day = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    children_limit = models.IntegerField(default=0)
+
+    is_document_required = models.BooleanField(default=False)
+
+    document_text = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+
+    is_sandwich_applicable = models.BooleanField(default=False)
+
+    excess_handling = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    notice_period_days = models.IntegerField(default=0)
+
+    is_active = models.BooleanField(default=True)
+
+    is_delete = models.BooleanField(default=False)
+
+    updated = models.DateTimeField(
+        auto_now=True,
+        null=True,
+        blank=True
+    )
+
+    created = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    acc_year = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True
+    )
+
+    session_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_user_type = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_user_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_company_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    sess_branch_id = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+
+        db_table = "leave_master_creation"
+
+    def __str__(self):
+
+        return self.leave_type
+
+class ReasonCreation(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    unique_id = models.CharField(
+        max_length=50
+    )
+
+    reason_name = models.CharField(
+        max_length=100
+    )
+
+    description = models.TextField()
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    is_delete = models.BooleanField(
+        default=False
+    )
+
+    updated_user_id = models.CharField(
+        max_length=40,
+        null=True,
+        blank=True
+    )
+
+    updated = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+
+    created_user_id = models.CharField(
+        max_length=40,
+        null=True,
+        blank=True
+    )
+
+    created = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    acc_year = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True
+    )
+
+    session_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True
+    )
+
+    sess_user_type = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True
+    )
+
+    sess_user_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True
+    )
+
+    sess_company_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True
+    )
+
+    sess_branch_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True
+    )
+
+    class Meta:
+        db_table = "reason_creation"
+
+    def __str__(self):
+        return self.reason_name
+
+
+class PayCycle(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    name = models.CharField(
+        max_length=100,
+        unique=True
+    )
+
+    from_day = models.PositiveSmallIntegerField()
+
+    to_day = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True
+    )
+
+    last_day_flag = models.BooleanField(
+        default=False
+    )
+
+    description = models.TextField(
+        null=True,
+        blank=True
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    created_by = models.IntegerField(
+        null=True,
+        blank=True
+    )
+
+    updated_by = models.IntegerField(
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "pay_cycle"
+
+    def __str__(self):
+        return self.name
+
+
+class SalaryCategory(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    unique_id = models.CharField(
+        max_length=50,
+        unique=True
+    )
+
+    salary_category = models.CharField(
+        max_length=100
+    )
+
+    description = models.TextField(
+        blank=True,
+        null=True
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    is_delete = models.BooleanField(
+        default=False
+    )
+
+    updated = models.DateTimeField(
+        auto_now=True
+    )
+
+    created = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    acc_year = models.CharField(
+        max_length=50
+    )
+
+    session_id = models.CharField(
+        max_length=50
+    )
+
+    sess_user_type = models.CharField(
+        max_length=50
+    )
+
+    sess_user_id = models.CharField(
+        max_length=50
+    )
+
+    sess_company_id = models.CharField(
+        max_length=50
+    )
+
+    sess_branch_id = models.CharField(
+        max_length=50
+    )
+
+    class Meta:
+        db_table = "salary_category"
+
+    def __str__(self):
+        return self.salary_category
+
+class GradeMaster(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    grade_name = models.CharField(max_length=100)
+
+    is_active = models.BooleanField(default=True)
+
+    is_delete = models.BooleanField(default=False)
+
+    updated = models.DateTimeField(auto_now=True)
+
+    created = models.DateTimeField(auto_now_add=True)
+
+    acc_year = models.CharField(max_length=50)
+
+    session_id = models.CharField(max_length=50)
+
+    sess_user_type = models.CharField(max_length=50)
+
+    sess_user_id = models.CharField(max_length=50)
+
+    sess_company_id = models.CharField(max_length=50)
+
+    sess_branch_id = models.CharField(max_length=50)
+
+    class Meta:
+        db_table = "grade_master"
+
+    def __str__(self):
+        return self.grade_name
+
+
+class BandMaster(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    band_name = models.CharField(
+        max_length=50
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    acc_year = models.CharField(
+        max_length=50
+    )
+
+    session_id = models.CharField(
+        max_length=50
+    )
+
+    sess_user_type = models.CharField(
+        max_length=50
+    )
+
+    sess_user_id = models.CharField(
+        max_length=50
+    )
+
+    sess_company_id = models.CharField(
+        max_length=50
+    )
+
+    sess_branch_id = models.CharField(
+        max_length=50
+    )
+
+    class Meta:
+        db_table = "band_master"
+
+    def __str__(self):
+        return self.band_name
+
+
+class LevelMaster(models.Model):
+
+    id = models.AutoField(primary_key=True)
+
+    band = models.ForeignKey(
+        BandMaster,
+        on_delete=models.PROTECT,
+        db_column="band_id"
+    )
+
+    level_name = models.CharField(
+        max_length=100
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    is_delete = models.BooleanField(
+        default=False
+    )
+
+    updated = models.DateTimeField(
+        auto_now=True
+    )
+
+    created = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    acc_year = models.CharField(
+        max_length=50
+    )
+
+    session_id = models.CharField(
+        max_length=50
+    )
+
+    sess_user_type = models.CharField(
+        max_length=50
+    )
+
+    sess_user_id = models.CharField(
+        max_length=50
+    )
+
+    sess_company_id = models.CharField(
+        max_length=50
+    )
+
+    sess_branch_id = models.CharField(
+        max_length=50
+    )
+
+    class Meta:
+        db_table = "level_master"
+
+    def __str__(self):
+        return self.level_name

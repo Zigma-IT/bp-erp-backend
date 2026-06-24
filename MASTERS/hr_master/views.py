@@ -1,16 +1,210 @@
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.generics import (
+    CreateAPIView,
     ListAPIView,
     RetrieveAPIView,
     UpdateAPIView,
     DestroyAPIView,
 
 )
+from django.db import connection
+from django.db.utils import OperationalError
+from django.utils import timezone
 
-from .models import DepartmentCreation, DesignationCreation, StaffCreation, StaffEmploymentStatus,StaffDependentDetails,StaffAccountDetails
-from .serializers import DepartmentCreationSerializer, DesignationCreationSerializer, StaffCreationSerializer , StaffEmploymentStatusSerializer,StaffDependentDetailsSerializer,StaffAccountDetailsSerializer
+from .models import (
+    DepartmentCreation,
+    DesignationCreation,
+    StaffCreation,
+    StaffEmploymentStatus,
+    StaffDependentDetails,
+    StaffAccountDetails,
+    StaffQualificationDetails,
+    LwfEntry,
+    ProfessionalTax,
+    LeaveMasterCreation,
+    ReasonCreation,
+    PayCycle,
+    SalaryCategory,
+    GradeMaster,
+    BandMaster,
+    LevelMaster,
+)
+from .serializers import (
+    DepartmentCreationSerializer,
+    DesignationCreationSerializer,
+    StaffCreationSerializer,
+    StaffEmploymentStatusSerializer,
+    StaffDependentDetailsSerializer,
+    StaffAccountDetailsSerializer,
+    StaffQualificationSerializer,
+    LwfEntrySerializer,
+    ProfessionalTaxSerializer,
+    LeaveMasterCreationSerializer,
+    ReasonCreationSerializer,
+    PayCycleSerializer,
+    SalaryCategorySerializer,
+    GradeMasterSerializer,
+    BandMasterSerializer,
+    LevelMasterSerializer,
+)
+
+
+def _is_lwf_schema_mismatch(error: Exception) -> bool:
+    message = str(error).lower()
+    return "unknown column" in message and any(
+        column in message
+        for column in [
+            "deduction_frequency",
+            "deduction_months",
+            "employer_amount",
+            "excluded_designations",
+            "effective_from",
+        ]
+    )
+
+
+def _legacy_lwf_payload(data):
+    timestamp = timezone.now()
+    return {
+        "unique_id": data.get("unique_id") or f"LWF-{int(timestamp.timestamp() * 1000)}",
+        "project_id": data.get("project_id", ""),
+        "state": data.get("state", ""),
+        "amount": data.get("amount") or 0,
+        "is_active": data.get("is_active", 1),
+        "is_delete": data.get("is_delete", 0),
+        "acc_year": data.get("acc_year", ""),
+        "session_id": data.get("session_id", "web"),
+        "sess_user_type": data.get("sess_user_type", "admin"),
+        "sess_user_id": data.get("sess_user_id", "0"),
+        "sess_company_id": data.get("sess_company_id", "0"),
+        "sess_branch_id": data.get("sess_branch_id", "0"),
+        "created": timestamp,
+        "updated": timestamp,
+    }
+
+
+def _prof_tax_payload(data):
+    timestamp = timezone.now()
+    return {
+        "unique_id": data.get("unique_id") or f"PROFTAX-{int(timestamp.timestamp() * 1000)}",
+        "project_id": data.get("project_id", ""),
+        "state": data.get("state", ""),
+        "salary_from": data.get("salary_from") or 0,
+        "salary_to": data.get("salary_to") or 0,
+        "gender": data.get("gender", "All"),
+        "deduction_frequency": data.get("deduction_frequency", "Monthly"),
+        "period_start_month": data.get("period_start_month", ""),
+        "period_end_month": data.get("period_end_month", ""),
+        "deduction_month": data.get("deduction_month", ""),
+        "special_month": data.get("special_month", ""),
+        "special_amt": data.get("special_amt") or 0,
+        "amount": data.get("amount") or 0,
+        "annual_cap": data.get("annual_cap") or 0,
+        "acc_year": data.get("acc_year") or str(timestamp.year),
+        "session_id": data.get("session_id", "web"),
+        "sess_user_type": data.get("sess_user_type", "admin"),
+        "sess_user_id": data.get("sess_user_id", "0"),
+        "sess_company_id": data.get("sess_company_id", "0"),
+        "sess_branch_id": data.get("sess_branch_id", "0"),
+        "is_active": data.get("is_active", True),
+        "is_delete": data.get("is_delete", False),
+        "is_salary_slab": bool(data.get("is_salary_slab")),
+        "is_gender_bound": bool(data.get("is_gender_bound")),
+        "is_special_month": bool(data.get("is_special_month")),
+        "is_annual_cap": bool(data.get("is_annual_cap")),
+    }
+
+
+def _create_lwf_entry_legacy(data):
+    payload = _legacy_lwf_payload(data)
+    columns = list(payload.keys())
+    placeholders = ", ".join(["%s"] * len(columns))
+    sql = f"INSERT INTO lwf_entry ({', '.join(columns)}) VALUES ({placeholders})"
+
+    with connection.cursor() as cursor:
+        cursor.execute(sql, [payload[column] for column in columns])
+        lwf_id = cursor.lastrowid
+
+    payload["lwf_id"] = lwf_id
+    return payload
+
+
+def _update_lwf_entry_legacy(lwf_id, data):
+    payload = {
+        "project_id": data.get("project_id", ""),
+        "state": data.get("state", ""),
+        "amount": data.get("amount") or 0,
+        "is_active": data.get("is_active", 1),
+        "is_delete": data.get("is_delete", 0),
+        "acc_year": data.get("acc_year", ""),
+        "session_id": data.get("session_id", "web"),
+        "sess_user_type": data.get("sess_user_type", "admin"),
+        "sess_user_id": data.get("sess_user_id", "0"),
+        "sess_company_id": data.get("sess_company_id", "0"),
+        "sess_branch_id": data.get("sess_branch_id", "0"),
+        "updated": timezone.now(),
+    }
+
+    assignments = ", ".join(f"{column} = %s" for column in payload.keys())
+    sql = f"UPDATE lwf_entry SET {assignments} WHERE lwf_id = %s"
+
+    with connection.cursor() as cursor:
+        cursor.execute(sql, [*payload.values(), lwf_id])
+
+    payload["lwf_id"] = lwf_id
+    return payload
+
+def _soft_delete_lwf_entry_legacy(lwf_id):
+    with connection.cursor() as cursor:
+        cursor.execute("UPDATE lwf_entry SET is_delete = 1, updated = %s WHERE lwf_id = %s", [timezone.now(), lwf_id])
+
+
+def _fetch_lwf_legacy_rows(lwf_id=None):
+    sql = """
+        SELECT lwf_id, unique_id, project_id, state, amount, is_active, is_delete,
+               updated, created, acc_year, session_id, sess_user_type,
+               sess_user_id, sess_company_id, sess_branch_id
+        FROM lwf_entry
+        WHERE is_delete = 0
+    """
+    params = []
+    if lwf_id is not None:
+        sql += " AND lwf_id = %s"
+        params.append(lwf_id)
+    sql += " ORDER BY lwf_id DESC"
+
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        columns = [column[0] for column in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+def _serialize_lwf_legacy_row(row):
+    return {
+        "lwf_id": row.get("lwf_id"),
+        "unique_id": row.get("unique_id"),
+        "project_id": row.get("project_id"),
+        "state": row.get("state"),
+        "amount": row.get("amount"),
+        "deduction_frequency": None,
+        "deduction_months": None,
+        "employer_amount": None,
+        "excluded_designations": None,
+        "effective_from": None,
+        "is_active": row.get("is_active"),
+        "is_delete": row.get("is_delete"),
+        "updated": row.get("updated"),
+        "created": row.get("created"),
+        "acc_year": row.get("acc_year"),
+        "session_id": row.get("session_id"),
+        "sess_user_type": row.get("sess_user_type"),
+        "sess_user_id": row.get("sess_user_id"),
+        "sess_company_id": row.get("sess_company_id"),
+        "sess_branch_id": row.get("sess_branch_id"),
+    }
 
 
 # CREATE
@@ -201,7 +395,9 @@ class DesignationListAPIView(ListAPIView):
     serializer_class = DesignationCreationSerializer
 
     def get_queryset(self):
-        return DesignationCreation.objects.filter(
+        return DesignationCreation.objects.select_related(
+            'band', 'level'
+        ).filter(
             is_delete=False
         ).order_by('-id')
 
@@ -854,3 +1050,1140 @@ class StaffToggleAPIView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+# QUALIFICATION TOGGLE
+class StaffQualificationToggleAPIView(APIView):
+    """Toggle the active status of a qualification"""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def patch(self, request, *args, **kwargs):
+        try:
+            staff_qual_id = kwargs.get('staff_qual_id')
+            qualification = StaffQualificationDetails.objects.get(
+                staff_qual_id=staff_qual_id,
+                is_delete=0
+            )
+
+            qualification.is_active = 0 if qualification.is_active else 1
+            qualification.save()
+
+            serializer = StaffQualificationSerializer(qualification)
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Qualification status toggled successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+        except StaffQualificationDetails.DoesNotExist:
+            return Response(
+                {
+                    "status": False,
+                    "message": "Qualification not found"
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {
+                    "status": False,
+                    "message": str(e)
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+# CREATE
+class StaffQualificationCreateAPIView(CreateAPIView):
+
+    queryset = StaffQualificationDetails.objects.all()
+
+    serializer_class = StaffQualificationSerializer
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+
+# LIST
+class StaffQualificationListAPIView(ListAPIView):
+
+    serializer_class = StaffQualificationSerializer
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    def get_queryset(self):
+
+        return StaffQualificationDetails.objects.filter(
+            is_delete=0
+        ).order_by('-staff_qual_id')
+
+
+# RETRIEVE
+class StaffQualificationRetrieveAPIView(RetrieveAPIView):
+
+    queryset = StaffQualificationDetails.objects.all()
+
+    serializer_class = StaffQualificationSerializer
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    lookup_field = 'staff_qual_id'
+
+
+# UPDATE
+class StaffQualificationUpdateAPIView(UpdateAPIView):
+
+    queryset = StaffQualificationDetails.objects.all()
+
+    serializer_class = StaffQualificationSerializer
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    lookup_field = 'staff_qual_id'
+
+
+# DELETE
+class StaffQualificationDeleteAPIView(DestroyAPIView):
+
+    queryset = StaffQualificationDetails.objects.all()
+
+    serializer_class = StaffQualificationSerializer
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    lookup_field = 'staff_qual_id'
+
+
+# CREATE
+class LwfEntryCreateAPIView(APIView):
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    def post(self, request):
+
+        serializer = LwfEntrySerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+            try:
+                serializer.save()
+
+                return Response(
+                    {
+                        "status": True,
+                        "message": "LWF Entry Created Successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+            except OperationalError as error:
+                if not _is_lwf_schema_mismatch(error):
+                    raise
+
+                data = _create_lwf_entry_legacy(request.data)
+                return Response(
+                    {
+                        "status": True,
+                        "message": "LWF Entry Created Successfully",
+                        "data": data,
+                        "warning": "Saved using legacy LWF schema fallback."
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+        return Response(
+            {
+                "status": False,
+                "errors": serializer.errors
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+# LIST
+class LwfEntryListAPIView(ListAPIView):
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    serializer_class = LwfEntrySerializer
+
+    def get_queryset(self):
+
+        return LwfEntry.objects.filter(
+            is_delete=0
+        ).order_by('-lwf_id')
+
+    def list(self, request, *args, **kwargs):
+        try:
+            return super().list(request, *args, **kwargs)
+        except OperationalError as error:
+            if not _is_lwf_schema_mismatch(error):
+                raise
+
+            rows = [_serialize_lwf_legacy_row(row) for row in _fetch_lwf_legacy_rows()]
+            return Response(rows)
+
+
+# RETRIEVE
+class LwfEntryRetrieveAPIView(RetrieveAPIView):
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    queryset = LwfEntry.objects.filter(
+        is_delete=0
+    )
+
+    serializer_class = LwfEntrySerializer
+
+    lookup_field = 'lwf_id'
+
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            return super().retrieve(request, *args, **kwargs)
+        except OperationalError as error:
+            if not _is_lwf_schema_mismatch(error):
+                raise
+
+            lwf_id = kwargs.get(self.lookup_field)
+            rows = _fetch_lwf_legacy_rows(lwf_id)
+            if not rows:
+                return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(_serialize_lwf_legacy_row(rows[0]))
+
+
+# UPDATE
+class LwfEntryUpdateAPIView(UpdateAPIView):
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    queryset = LwfEntry.objects.filter(
+        is_delete=0
+    )
+
+    serializer_class = LwfEntrySerializer
+
+    lookup_field = 'lwf_id'
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        try:
+            instance = self.get_object()
+            serializer = self.get_serializer(instance, data=request.data, partial=partial)
+
+            if serializer.is_valid():
+                try:
+                    serializer.save()
+                    return Response(
+                        {
+                            "status": True,
+                            "message": "LWF Entry Updated Successfully",
+                            "data": serializer.data
+                        }
+                    )
+                except OperationalError as error:
+                    if not _is_lwf_schema_mismatch(error):
+                        raise
+
+                    data = _update_lwf_entry_legacy(kwargs.get(self.lookup_field), request.data)
+                    return Response(
+                        {
+                            "status": True,
+                            "message": "LWF Entry Updated Successfully",
+                            "data": data,
+                            "warning": "Updated using legacy LWF schema fallback."
+                        }
+                    )
+
+            return Response(
+                {
+                    "status": False,
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except OperationalError as error:
+            if not _is_lwf_schema_mismatch(error):
+                raise
+
+            data = _update_lwf_entry_legacy(kwargs.get(self.lookup_field), request.data)
+            return Response(
+                {
+                    "status": True,
+                    "message": "LWF Entry Updated Successfully",
+                    "data": data,
+                    "warning": "Updated using legacy LWF schema fallback."
+                }
+            )
+
+
+# DELETE
+class LwfEntryDeleteAPIView(DestroyAPIView):
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    queryset = LwfEntry.objects.all()
+
+    serializer_class = LwfEntrySerializer
+
+    lookup_field = 'lwf_id'
+
+    def delete(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            instance.is_delete = 1
+            instance.save()
+        except OperationalError as error:
+            if not _is_lwf_schema_mismatch(error):
+                raise
+            _soft_delete_lwf_entry_legacy(kwargs.get(self.lookup_field))
+
+        return Response(
+            {
+                "status": True,
+                "message": "LWF Entry Deleted Successfully"
+            },
+            status=status.HTTP_200_OK
+        )
+
+# CREATE
+class ProfessionalTaxCreateAPIView(APIView):
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+
+        serializer = ProfessionalTaxSerializer(
+            data=_prof_tax_payload(request.data)
+        )
+
+        if serializer.is_valid():
+
+            serializer.save()
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Professional Tax Created Successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            {
+                "status": False,
+                "errors": serializer.errors
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+# LIST
+class ProfessionalTaxListAPIView(ListAPIView):
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    serializer_class = ProfessionalTaxSerializer
+
+    def get_queryset(self):
+
+        return ProfessionalTax.objects.filter(
+            is_delete=False
+        ).order_by('-id')
+
+
+# RETRIEVE
+class ProfessionalTaxRetrieveAPIView(RetrieveAPIView):
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    queryset = ProfessionalTax.objects.filter(
+        is_delete=False
+    )
+
+    serializer_class = ProfessionalTaxSerializer
+
+    lookup_field = 'id'
+
+
+# UPDATE
+class ProfessionalTaxUpdateAPIView(UpdateAPIView):
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    queryset = ProfessionalTax.objects.filter(
+        is_delete=False
+    )
+
+    serializer_class = ProfessionalTaxSerializer
+
+    lookup_field = 'id'
+
+
+# DELETE
+class ProfessionalTaxDeleteAPIView(DestroyAPIView):
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    queryset = ProfessionalTax.objects.all()
+
+    serializer_class = ProfessionalTaxSerializer
+
+    lookup_field = 'id'
+
+    def delete(self, request, *args, **kwargs):
+
+        instance = self.get_object()
+
+        instance.is_delete = True
+
+        instance.save()
+
+        return Response(
+            {
+                "status": True,
+                "message": "Professional Tax Deleted Successfully"
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+# CREATE
+class LeaveMasterCreateAPIView(APIView):
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    def post(self, request):
+
+        serializer = LeaveMasterCreationSerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+
+            serializer.save()
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Leave Master Created Successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            {
+                "status": False,
+                "errors": serializer.errors
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+# LIST
+class LeaveMasterListAPIView(ListAPIView):
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    serializer_class = LeaveMasterCreationSerializer
+
+    def get_queryset(self):
+
+        return LeaveMasterCreation.objects.filter(
+            is_delete=False
+        ).order_by('-id')
+
+
+# RETRIEVE
+class LeaveMasterRetrieveAPIView(RetrieveAPIView):
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    queryset = LeaveMasterCreation.objects.filter(
+        is_delete=False
+    )
+
+    serializer_class = LeaveMasterCreationSerializer
+
+    lookup_field = "id"
+
+
+# UPDATE
+class LeaveMasterUpdateAPIView(UpdateAPIView):
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    queryset = LeaveMasterCreation.objects.filter(
+        is_delete=False
+    )
+
+    serializer_class = LeaveMasterCreationSerializer
+
+    lookup_field = "id"
+
+
+# DELETE
+class LeaveMasterDeleteAPIView(DestroyAPIView):
+
+    permission_classes = [AllowAny]
+
+    authentication_classes = []
+
+    queryset = LeaveMasterCreation.objects.all()
+
+    serializer_class = LeaveMasterCreationSerializer
+
+    lookup_field = "id"
+
+    def delete(self, request, *args, **kwargs):
+
+        instance = self.get_object()
+
+        instance.is_delete = True
+
+        instance.save()
+
+        return Response(
+            {
+                "status": True,
+                "message": "Leave Master Deleted Successfully"
+            },
+            status=status.HTTP_200_OK
+        )
+
+class ReasonCreateAPIView(APIView):
+
+    def post(self, request):
+
+        serializer = ReasonCreationSerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+
+            serializer.save()
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class ReasonListAPIView(APIView):
+
+    def get(self, request):
+
+        reasons = ReasonCreation.objects.filter(
+            is_delete=False
+        ).order_by("-id")
+
+        serializer = ReasonCreationSerializer(
+            reasons,
+            many=True
+        )
+
+        return Response(serializer.data)
+
+
+class ReasonRetrieveAPIView(APIView):
+
+    def get(self, request, pk):
+
+        try:
+
+            reason = ReasonCreation.objects.get(
+                pk=pk,
+                is_delete=False
+            )
+
+        except ReasonCreation.DoesNotExist:
+
+            return Response(
+                {"error": "Reason not found"},
+                status=404
+            )
+
+        serializer = ReasonCreationSerializer(reason)
+
+        return Response(serializer.data)
+
+
+class ReasonUpdateAPIView(APIView):
+
+    def put(self, request, pk):
+
+        try:
+
+            reason = ReasonCreation.objects.get(pk=pk)
+
+        except ReasonCreation.DoesNotExist:
+
+            return Response(
+                {"error": "Reason not found"},
+                status=404
+            )
+
+        serializer = ReasonCreationSerializer(
+            reason,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+
+            serializer.save()
+
+            return Response(serializer.data)
+
+        return Response(
+            serializer.errors,
+            status=400
+        )
+
+
+class ReasonDeleteAPIView(APIView):
+
+    def delete(self, request, pk):
+
+        try:
+
+            reason = ReasonCreation.objects.get(pk=pk)
+
+        except ReasonCreation.DoesNotExist:
+
+            return Response(
+                {"error": "Reason not found"},
+                status=404
+            )
+
+        reason.is_delete = True
+        reason.save()
+
+        return Response(
+            {
+                "message": "Reason deleted successfully"
+            }
+        )
+
+class PayCycleCreateAPIView(APIView):
+
+    def post(self, request):
+
+        serializer = PayCycleSerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class PayCycleListAPIView(APIView):
+
+    def get(self, request):
+
+        data = PayCycle.objects.all().order_by("-id")
+
+        serializer = PayCycleSerializer(
+            data,
+            many=True
+        )
+
+        return Response(serializer.data)
+
+
+class PayCycleRetrieveAPIView(APIView):
+
+    def get(self, request, pk):
+
+        try:
+            obj = PayCycle.objects.get(pk=pk)
+
+        except PayCycle.DoesNotExist:
+            return Response(
+                {"error": "Record not found"},
+                status=404
+            )
+
+        serializer = PayCycleSerializer(obj)
+
+        return Response(serializer.data)
+
+
+class PayCycleUpdateAPIView(APIView):
+
+    def put(self, request, pk):
+
+        try:
+            obj = PayCycle.objects.get(pk=pk)
+
+        except PayCycle.DoesNotExist:
+            return Response(
+                {"error": "Record not found"},
+                status=404
+            )
+
+        serializer = PayCycleSerializer(
+            obj,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(serializer.data)
+
+        return Response(
+            serializer.errors,
+            status=400
+        )
+
+
+class PayCycleDeleteAPIView(APIView):
+
+    def delete(self, request, pk):
+
+        try:
+            obj = PayCycle.objects.get(pk=pk)
+
+        except PayCycle.DoesNotExist:
+            return Response(
+                {"error": "Record not found"},
+                status=404
+            )
+
+        obj.delete()
+
+        return Response(
+            {"message": "Deleted Successfully"}
+        )
+class SalaryCategoryCreateAPIView(APIView):
+
+    def post(self, request):
+
+        serializer = SalaryCategorySerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class SalaryCategoryListAPIView(APIView):
+
+    def get(self, request):
+
+        queryset = SalaryCategory.objects.filter(
+            is_delete=False
+        ).order_by("-id")
+
+        serializer = SalaryCategorySerializer(
+            queryset,
+            many=True
+        )
+
+        return Response(serializer.data)
+
+
+class SalaryCategoryRetrieveAPIView(APIView):
+
+    def get(self, request, pk):
+
+        try:
+            obj = SalaryCategory.objects.get(pk=pk)
+
+        except SalaryCategory.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        serializer = SalaryCategorySerializer(obj)
+
+        return Response(serializer.data)
+
+
+class SalaryCategoryUpdateAPIView(APIView):
+
+    def put(self, request, pk):
+
+        try:
+            obj = SalaryCategory.objects.get(pk=pk)
+
+        except SalaryCategory.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        serializer = SalaryCategorySerializer(
+            obj,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(serializer.data)
+
+        return Response(
+            serializer.errors,
+            status=400
+        )
+
+
+class SalaryCategoryDeleteAPIView(APIView):
+
+    def delete(self, request, pk):
+
+        try:
+            obj = SalaryCategory.objects.get(pk=pk)
+
+        except SalaryCategory.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        obj.is_delete = True
+        obj.save()
+
+        return Response(
+            {"message": "Deleted Successfully"}
+        )
+
+class GradeDropdownAPIView(APIView):
+    """Returns active grades for use in dropdowns."""
+
+    def get(self, request):
+        queryset = GradeMaster.objects.filter(
+            is_active=True, is_delete=False
+        ).order_by("grade_name")
+        serializer = GradeMasterSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class GradeMasterCreateAPIView(APIView):
+
+    def post(self, request):
+        serializer = GradeMasterSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GradeMasterListAPIView(APIView):
+
+    def get(self, request):
+        queryset = GradeMaster.objects.filter(is_delete=False).order_by("-id")
+        serializer = GradeMasterSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class GradeMasterRetrieveAPIView(APIView):
+
+    def get(self, request, pk):
+        try:
+            obj = GradeMaster.objects.get(pk=pk, is_delete=False)
+        except GradeMaster.DoesNotExist:
+            return Response({"message": "Record not found"}, status=404)
+        return Response(GradeMasterSerializer(obj).data)
+
+
+class GradeMasterUpdateAPIView(APIView):
+
+    def put(self, request, pk):
+        try:
+            obj = GradeMaster.objects.get(pk=pk)
+        except GradeMaster.DoesNotExist:
+            return Response({"message": "Record not found"}, status=404)
+        serializer = GradeMasterSerializer(obj, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GradeMasterDeleteAPIView(APIView):
+
+    def delete(self, request, pk):
+        try:
+            obj = GradeMaster.objects.get(pk=pk)
+        except GradeMaster.DoesNotExist:
+            return Response({"message": "Record not found"}, status=404)
+        obj.delete()
+        return Response({"message": "Deleted Successfully"})
+
+
+class BandMasterCreateAPIView(APIView):
+
+    def post(self, request):
+
+        serializer = BandMasterSerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class BandMasterListAPIView(APIView):
+
+    def get(self, request):
+
+        queryset = BandMaster.objects.all().order_by("-id")
+
+        serializer = BandMasterSerializer(
+            queryset,
+            many=True
+        )
+
+        return Response(serializer.data)
+
+
+class BandMasterRetrieveAPIView(APIView):
+
+    def get(self, request, pk):
+
+        try:
+            obj = BandMaster.objects.get(pk=pk)
+
+        except BandMaster.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        serializer = BandMasterSerializer(obj)
+
+        return Response(serializer.data)
+
+
+class BandMasterUpdateAPIView(APIView):
+
+    def put(self, request, pk):
+
+        try:
+            obj = BandMaster.objects.get(pk=pk)
+
+        except BandMaster.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        serializer = BandMasterSerializer(
+            obj,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(serializer.data)
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class BandMasterDeleteAPIView(APIView):
+
+    def delete(self, request, pk):
+
+        try:
+            obj = BandMaster.objects.get(pk=pk)
+
+        except BandMaster.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        obj.delete()
+
+        return Response(
+            {"message": "Deleted Successfully"}
+        )
+
+
+class LevelMasterCreateAPIView(APIView):
+
+    def post(self, request):
+
+        serializer = LevelMasterSerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class LevelMasterListAPIView(APIView):
+
+    def get(self, request):
+
+        queryset = LevelMaster.objects.select_related("band").all().order_by("-id")
+
+        serializer = LevelMasterSerializer(
+            queryset,
+            many=True
+        )
+
+        return Response(serializer.data)
+
+
+class LevelMasterRetrieveAPIView(APIView):
+
+    def get(self, request, pk):
+
+        try:
+            obj = LevelMaster.objects.select_related("band").get(pk=pk)
+
+        except LevelMaster.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        serializer = LevelMasterSerializer(obj)
+
+        return Response(serializer.data)
+
+
+class LevelMasterUpdateAPIView(APIView):
+
+    def put(self, request, pk):
+
+        try:
+            obj = LevelMaster.objects.get(pk=pk)
+
+        except LevelMaster.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        serializer = LevelMasterSerializer(
+            obj,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(serializer.data)
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class LevelMasterDeleteAPIView(APIView):
+
+    def delete(self, request, pk):
+
+        try:
+            obj = LevelMaster.objects.get(pk=pk)
+
+        except LevelMaster.DoesNotExist:
+            return Response(
+                {"message": "Record not found"},
+                status=404
+            )
+
+        obj.delete()
+
+        return Response(
+            {"message": "Deleted Successfully"}
+        )
