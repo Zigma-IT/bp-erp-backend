@@ -995,6 +995,8 @@ class GRNLineSerializer(serializers.Serializer):
 
 class GRNSerializer(serializers.ModelSerializer):
     items = GRNLineSerializer(many=True, source="items_data", required=False)
+    company_name = serializers.SerializerMethodField()
+    project_name = serializers.SerializerMethodField()
 
     class Meta:
         model = GRN
@@ -1003,7 +1005,9 @@ class GRNSerializer(serializers.ModelSerializer):
             "unique_id",
             "grn_number",
             "company_code",
+            "company_name",
             "project_code",
+            "project_name",
             "po",
             "supplier_code",
             "supplier_name",
@@ -1029,6 +1033,8 @@ class GRNSerializer(serializers.ModelSerializer):
             "id",
             "unique_id",
             "grn_number",
+            "company_name",
+            "project_name",
             "created_at",
             "level1_status",
             "level1_approved_by",
@@ -1039,6 +1045,12 @@ class GRNSerializer(serializers.ModelSerializer):
             "level2_checked_at",
             "level2_remarks",
         ]
+
+    def get_company_name(self, obj):
+        return _company_name(obj.company_code)
+
+    def get_project_name(self, obj):
+        return _project_name(obj.project_code)
 
     def validate(self, attrs):
         items = attrs.get("items_data")
@@ -1130,6 +1142,8 @@ class SRNLineSerializer(serializers.Serializer):
 
 class SRNSerializer(serializers.ModelSerializer):
     items = SRNLineSerializer(many=True, source="items_data", required=False)
+    company_name = serializers.SerializerMethodField()
+    project_name = serializers.SerializerMethodField()
 
     class Meta:
         model = SRN
@@ -1138,7 +1152,9 @@ class SRNSerializer(serializers.ModelSerializer):
             "unique_id",
             "srn_number",
             "company_code",
+            "company_name",
             "project_code",
+            "project_name",
             "po",
             "supplier_code",
             "supplier_name",
@@ -1184,6 +1200,8 @@ class SRNSerializer(serializers.ModelSerializer):
             "id",
             "unique_id",
             "srn_number",
+            "company_name",
+            "project_name",
             "created_at",
             "total_amount",
             "level1_status",
@@ -1195,6 +1213,12 @@ class SRNSerializer(serializers.ModelSerializer):
             "level2_approved_at",
             "level2_remarks",
         ]
+
+    def get_company_name(self, obj):
+        return _company_name(obj.company_code)
+
+    def get_project_name(self, obj):
+        return _project_name(obj.project_code)
 
     def validate(self, attrs):
         items = attrs.get("items_data")
