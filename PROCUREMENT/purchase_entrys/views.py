@@ -56,6 +56,20 @@ from .serializers import (
 )
 
 
+def _get_company_name(code):
+    if not code:
+        return ""
+    obj = MasterDataService.get_company_by_code(code)
+    return obj.name if obj else code
+
+
+def _get_project_name(code):
+    if not code:
+        return ""
+    obj = MasterDataService.get_project_by_code(code)
+    return obj.name if obj else code
+
+
 # Rate order
 RATE_ORDER_APPROVER_USERNAME = "ram"
 RATE_ORDER_APPROVER_USER_TYPE = "purchase head"
@@ -322,9 +336,9 @@ def _serialize_purchase_order_rows(purchase_orders, meta):
                 "sno": meta["start"] + index,
                 "po_number": purchase_order.po_number,
                 "company_code": purchase_order.company_code,
-                "company_name": purchase_order.company_code,
+                "company_name": _get_company_name(purchase_order.company_code),
                 "project_code": purchase_order.project_code,
-                "project_name": purchase_order.project_code,
+                "project_name": _get_project_name(purchase_order.project_code),
                 "supplier_code": purchase_order.supplier_code,
                 "supplier_name": purchase_order.supplier_name or purchase_order.supplier_code,
                 "entry_date": purchase_order.entry_date,
@@ -384,9 +398,9 @@ def _serialize_approval_rows(purchase_orders, meta, current_level):
             "entry_date": purchase_order.entry_date,
             "po_number": purchase_order.po_number,
             "company_code": purchase_order.company_code,
-            "company_name": purchase_order.company_code,
+            "company_name": _get_company_name(purchase_order.company_code),
             "project_code": purchase_order.project_code,
-            "project_name": purchase_order.project_code,
+            "project_name": _get_project_name(purchase_order.project_code),
             "supplier_code": purchase_order.supplier_code,
             "supplier_name": purchase_order.supplier_name or purchase_order.supplier_code,
             "net_amount": float(purchase_order.total_basic_value),
@@ -768,8 +782,8 @@ def purchase_requisition_approval_list(request):
         "requisition_date",
         "requested_by",
         "status",
-        company_name=F("company_code"),
-        project_name=F("project_code"),
+        "company_code",
+        "project_code",
     )
 
     data = []
@@ -779,8 +793,8 @@ def purchase_requisition_approval_list(request):
                 "id": row["id"],
                 "sno": index,
                 "pr_number": row["pr_number"],
-                "company_name": row["company_name"],
-                "project_name": row["project_name"],
+                "company_name": _get_company_name(row["company_code"]),
+                "project_name": _get_project_name(row["project_code"]),
                 "requisition_for": row["requisition_for"],
                 "requisition_type": row["requisition_type"],
                 "requisition_date": row["requisition_date"],
@@ -893,9 +907,9 @@ class GRNViewSet(viewsets.ModelViewSet):
             'supplier_invoice_no',
             'grn_number',
             'status',
-            company_name=F('company_code'),
-            project_name=F('project_code'),
-            supplier_name=F('supplier_name'),
+            'company_code',
+            'project_code',
+            'supplier_name',
             po_number=F('po__po_number'),
         )
 
@@ -904,8 +918,8 @@ class GRNViewSet(viewsets.ModelViewSet):
             result.append({
                 "id": row["id"],
                 "sno": i,
-                "company_name": row['company_name'],
-                "project_name": row['project_name'],
+                "company_name": _get_company_name(row['company_code']),
+                "project_name": _get_project_name(row['project_code']),
                 "supplier_name": row['supplier_name'],
                 "invoice_date": row['invoice_date'],
                 "po_number": row['po_number'],
@@ -933,9 +947,9 @@ class SRNViewSet(viewsets.ModelViewSet):
             'invoice_date',
             'supplier_invoice_no',
             'srn_number',
-            company_name=F('company_code'),
-            project_name=F('project_code'),
-            supplier_name=F('supplier_name'),
+            'company_code',
+            'project_code',
+            'supplier_name',
             po_number=F('po__po_number'),
         )
 
@@ -944,8 +958,8 @@ class SRNViewSet(viewsets.ModelViewSet):
             result.append({
                 "id": row["id"],
                 "sno": i,
-                "company_name": row['company_name'],
-                "project_name": row['project_name'],
+                "company_name": _get_company_name(row['company_code']),
+                "project_name": _get_project_name(row['project_code']),
                 "supplier_name": row['supplier_name'],
                 "invoice_date": row['invoice_date'],
                 "po_number": row['po_number'],
